@@ -1,6 +1,7 @@
 #pragma once
 #include "Task.hpp"
 #include "core/Config.hpp"
+#include <cmath> // Added for std::abs
 
 class ChaosEngine {
 public:
@@ -31,8 +32,18 @@ public:
         double k4y = dy(sX + k3x * dt, sY + k3y * dt, sZ + k3z * dt);
         double k4z = dz(sX + k3x * dt, sY + k3y * dt, sZ + k3z * dt);
 
-        task.stressX += (dt / 6.0) * (k1x + 2 * k2x + 2 * k3x + k4x);
-        task.stressY += (dt / 6.0) * (k1y + 2 * k2y + 2 * k3y + k4y);
-        task.stressZ += (dt / 6.0) * (k1z + 2 * k2z + 2 * k3z + k4z);
+        // Final weighted sums
+        double deltaX = (dt / 6.0) * (k1x + 2 * k2x + 2 * k3x + k4x);
+        double deltaY = (dt / 6.0) * (k1y + 2 * k2y + 2 * k3y + k4y);
+        double deltaZ = (dt / 6.0) * (k1z + 2 * k2z + 2 * k3z + k4z);
+
+        task.stressX += deltaX;
+        task.stressY += deltaY;
+        task.stressZ += deltaZ;
+
+        // --- ENTROPY LOGIC ---
+        // Accumulate entropy based on the total movement in phase space.
+        // We use a small multiplier (0.05) so it doesn't collapse too instantly.
+        task.entropy += (std::abs(deltaX) + std::abs(deltaY) + std::abs(deltaZ)) * 0.001;
     }
 };

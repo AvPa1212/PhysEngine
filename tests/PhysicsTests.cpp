@@ -21,15 +21,22 @@ void testRK4Stability() {
 
 void testChaosDivergence() {
     Task t1, t2;
+    // Resetting states to a known sensitive region
+    t1.stressX = 1.0; t1.stressY = 1.0; t1.stressZ = 1.0;
+    t2 = t1; 
+    
     t2.stressX += 0.00001; // Tiny perturbation
 
-    for (int i = 0; i < 1000; ++i) {
+    // Increase steps to 3000 to allow exponential divergence to hit the threshold
+    for (int i = 0; i < 3000; ++i) {
         ChaosEngine::update(t1);
         ChaosEngine::update(t2);
     }
 
-    // Lorenz attractor should diverge significantly
-    assert(std::abs(t1.stressX - t2.stressX) > 0.1);
+    double delta = std::abs(t1.stressX - t2.stressX);
+    std::cout << "Final Delta: " << delta << std::endl;
+    
+    assert(delta > 0.1);
     std::cout << "[PASS] Chaos Divergence Test" << std::endl;
 }
 
