@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Momentum: Quantum Dynamics Engine</title>
+    <style>
+        body { background: #0f172a; color: #f8fafc; font-family: system-ui; display: flex; flex-direction: column; align-items: center; }
+        #canvas { border: 1px solid #334155; border-radius: 8px; background: #020617; }
+        .stats { margin-top: 20px; font-family: monospace; background: #1e293b; padding: 15px; border-radius: 8px; width: 400px; }
+        .val { color: #38bdf8; float: right; }
+        h1 { color: #38bdf8; letter-spacing: -1px; }
+        .button { background: #38bdf8; color: #0f172a; padding: 10px 20px; border-radius: 6px; cursor: pointer; border: none; font-weight: bold; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>MOMENTUM <small style="font-size: 0.4em; opacity: 0.6;">PHASE 2 WEB</small></h1>
+    <canvas id="canvas" width="600" height="300"></canvas>
+    
+    <div class="stats">
+        <div>Entropy: <span id="entropy" class="val">0.000000</span></div>
+        <div>Collapse Prob: <span id="prob" class="val">0.0%</span></div>
+        <div>Chaos X: <span id="chaosX" class="val">0.000</span></div>
+        <button id="collapseBtn" class="button">FORCE QUANTUM COLLAPSE</button>
+    </div>
+
+    <script src="web_dist/MomentumCore.js"></script>
+    
+    <script>
+        const ctx = document.getElementById('canvas').getContext('2d');
+        
+        // Initialize the Wasm Module
+        PhysEngine().then(Module => {
+            console.log("Momentum Core Online");
+            
+            // Create Task in Wasm Memory
+            const task = Module.Task_Create();
+            
+            // UI Elements
+            const entropyEl = document.getElementById('entropy');
+            const probEl = document.getElementById('prob');
+            const chaosXEl = document.getElementById('chaosX');
+
+            document.getElementById('collapseBtn').onclick = () => {
+                Module.Engine_PerformQuantumCollapse(task);
+                console.log("Collapse Triggered");
+            };
+
+            function update() {
+                // 1. Step the C++ Engines
+                Module.Engine_UpdateChaos(task);
+                
+                // 2. Extract Data
+                const x = Module.Task_GetPositionX(task);
+                const ex = Module.Task_GetEntropy(task);
+                const cx = Module.Task_GetStressX(task);
+                
+                // 3. Update UI
+                entropyEl.innerText = ex.toFixed(6);
+                probEl.innerText = (ex * 72).toFixed(1) + "%"; // Mock visualization scale
+                chaosXEl.innerText = cx.toFixed(3);
+
+                // 4. Render simple visualization
+                ctx.clearRect(0, 0, 600, 300);
+                ctx.fillStyle = "#38bdf8";
+                ctx.beginPath();
+                ctx.arc(300 + cx * 5, 150 + x, 10, 0, Math.PI * 2);
+                ctx.fill();
+
+                requestAnimationFrame(update);
+            }
+
+            update();
+        });
+    </script>
+</body>
+</html>

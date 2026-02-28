@@ -2,6 +2,7 @@
 #include "Task.hpp"
 #include "core/Config.hpp"
 #include <cmath>
+#include <algorithm> // Added for std::max / std::min
 
 class QuantumEngine {
 public:
@@ -38,6 +39,17 @@ public:
         }
     }
 
+    // --- Added for Momentum Bridge / Blueprint ---
+    static double calculateCollapseProbability(const Task& task) {
+        // Probability scales with Shannon Entropy.
+        // For a 4-state system, max theoretical entropy is ln(4) ≈ 1.386.
+        double maxEntropy = 1.38629436;
+        double prob = task.entropy / maxEntropy;
+        
+        // Clamp the probability securely between 0.0 (0%) and 1.0 (100%)
+        return std::max(0.0, std::min(1.0, prob));
+    }
+
     static void collapse(Task& task) {
         // Deterministic collapse implies projecting onto highest probability state for Phase 1
         int maxIdx = 0;
@@ -51,6 +63,11 @@ public:
             }
             task.psi[i] = { 0.0, 0.0 };
         }
+        
+        // Project to the pure basis state
         task.psi[maxIdx] = { 1.0, 0.0 };
+        
+        // A pure state has 0 entropy. Reset it here so the bridge reflects the collapse.
+        task.entropy = 0.0; 
     }
 };

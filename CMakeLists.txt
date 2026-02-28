@@ -44,3 +44,8 @@ target_link_libraries(QuantumTests PRIVATE MomentumCore)
 
 # --- 4. INSTALL (Optional but helpful) ---
 # Useful if you want to deploy the library later
+
+# At the bottom of CMakeLists.txt
+if(EMSCRIPTEN)
+    include(Emscripten.cmake)
+endif()

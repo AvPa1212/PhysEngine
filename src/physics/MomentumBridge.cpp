@@ -1,11 +1,17 @@
 #include "physics/MomentumBridge.h"
 #include "physics/ClassicalEngine.hpp"
 #include "physics/ChaosEngine.hpp"
-#include "physics/QuantumEngine.hpp" // Added for Quantum operations
+#include "physics/QuantumEngine.hpp"
+#include <iostream>
 
-// We cast the void* back to a Task* internally so the engines know what to do with it.
+#ifdef __EMSCRIPTEN__
+#include <emscripten/bind.h>
+using namespace emscripten;
+#endif
+
 extern "C" {
 
+    // --- Task Lifecycle ---
     void* Task_Create() {
         return static_cast<void*>(new Task());
     }
@@ -16,6 +22,7 @@ extern "C" {
         }
     }
 
+    // --- Classical Mechanics ---
     void Task_SetPosition(void* taskPtr, double x, double y) {
         if (taskPtr) {
             auto* task = static_cast<Task*>(taskPtr);
@@ -38,6 +45,7 @@ extern "C" {
         }
     }
 
+    // --- Chaotic Subsystem (Lorenz) ---
     void Task_SetStress(void* taskPtr, double sx, double sy, double sz) {
         if (taskPtr) {
             auto* task = static_cast<Task*>(taskPtr);
@@ -47,6 +55,7 @@ extern "C" {
         }
     }
 
+    // --- Getters ---
     double Task_GetPositionX(void* taskPtr) {
         return taskPtr ? static_cast<Task*>(taskPtr)->position.x : 0.0;
     }
@@ -68,10 +77,10 @@ extern "C" {
     }
 
     double Task_GetEntropy(void* taskPtr) {
-        // Assuming you have an entropy field based on your earlier Validation phase
         return taskPtr ? static_cast<Task*>(taskPtr)->entropy : 0.0;
     }
 
+    // --- Execution Engines ---
     void Engine_IntegrateClassical(void* taskPtr) {
         if (taskPtr) {
             ClassicalEngine::integrateRK4(*static_cast<Task*>(taskPtr));
@@ -84,26 +93,39 @@ extern "C" {
         }
     }
 
-    // --- New Quantum Operations ---
-
+    // --- Quantum Dynamics Engine ---
     double Task_GetCollapseProbability(void* taskPtr) {
         if (!taskPtr) return 0.0;
         auto* task = static_cast<Task*>(taskPtr);
         
-        // Example logic: Probability increases with entropy, capped at 1.0 (100%)
-        return (task->entropy > 1.0) ? 1.0 : task->entropy;
+        // Momentum Blueprint: Probability is tied to current quantum state norm
+        // Often correlated with entropy in chaotic regimes
+        return QuantumEngine::calculateCollapseProbability(*task);
     }
 
     void Engine_PerformQuantumCollapse(void* taskPtr) {
         if (taskPtr) {
             auto* task = static_cast<Task*>(taskPtr);
             
-            // Note: If you have a specific static method in QuantumEngine, 
-            // you can call it here like: QuantumEngine::collapse(*task);
+            // Forces state vector to a pure basis state (Entropy -> 0)
+            QuantumEngine::collapse(*task);
             
-            // Otherwise, here is the manual fallback logic:
-            task->stressX = (task->stressX > 0) ? 1.0 : -1.0;
-            task->entropy = 0.0; // Reset entropy after the collapse event
+            // Classical reaction to collapse (Momentum Blueprint)
+            // A collapse typically causes a sudden "nudge" in classical velocity
+            task->velocity.y += 5.0; 
         }
     }
 }
+
+// --- WebAssembly Bindings (Emscripten Only) ---
+#ifdef __EMSCRIPTEN__
+EMSCRIPTEN_BINDINGS(momentum_web_bridge) {
+    function("Task_Create", &Task_Create, allow_raw_pointers());
+    function("Task_Destroy", &Task_Destroy, allow_raw_pointers());
+    function("Task_SetPosition", &Task_SetPosition, allow_raw_pointers());
+    function("Task_GetPositionX", &Task_GetPositionX, allow_raw_pointers());
+    function("Task_GetEntropy", &Task_GetEntropy, allow_raw_pointers());
+    function("Engine_UpdateChaos", &Engine_UpdateChaos, allow_raw_pointers());
+    function("Engine_PerformQuantumCollapse", &Engine_PerformQuantumCollapse, allow_raw_pointers());
+}
+#endif
