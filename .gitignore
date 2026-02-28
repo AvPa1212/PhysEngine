@@ -240,3 +240,32 @@ butterfly_attractor.png
 chaos_evolution.mp4
 *.csv
 *.dat
+
+## ======================================================================
+## WEB & WEBASSEMBLY (EMSCRIPTEN)
+## ======================================================================
+# Emscripten SDK artifacts
+emsdk/
+.emsdk_cache/
+emsdk_env.sh
+emsdk_manifest.json
+
+# Web Build Directories
+build_web/
+web_dist/
+
+# Wasm specific output types
+*.wasm
+*.js.mem
+*.js.symbols
+
+# Ignore the local dev server log and storage
+dev_server.log
+.web_cache/
+
+## ======================================================================
+## MOMENTUM REFACTORS & BACKUPS
+## ======================================================================
+# Ignore temporary backup files or manual bridge tests
+*MomentumBridge_old*
+*.tmp
