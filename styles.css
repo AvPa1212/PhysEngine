@@ -1,0 +1,122 @@
+/* ==========================================================================
+   MOMENTUM CORE: Web App Stylesheet
+   ========================================================================== */
+
+/* --- Base Theme --- */
+:root {
+    --bg-dark: #050914;
+    --bg-glow: radial-gradient(circle at 50% 0%, #112240 0%, #050914 60%);
+    --panel-bg: rgba(17, 25, 40, 0.6);
+    --panel-border: rgba(255, 255, 255, 0.1);
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --quantum-blue: #00e5ff;
+    --quantum-glow: 0 0 15px rgba(0, 229, 255, 0.4);
+    --danger-red: #ff3366;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg-dark);
+    background-image: var(--bg-glow);
+    color: var(--text-main);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+/* --- Typography --- */
+h1 {
+    font-size: 2.5rem;
+    font-weight: 800;
+    letter-spacing: 4px;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(90deg, #fff, var(--quantum-blue));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-transform: uppercase;
+}
+
+h1 small {
+    font-size: 0.35em;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+    -webkit-text-fill-color: var(--text-muted);
+    vertical-align: middle;
+    margin-left: 10px;
+}
+
+/* --- Simulation Viewport (Canvas) --- */
+#canvas {
+    border-radius: 12px;
+    border: 1px solid var(--panel-border);
+    background: rgba(0, 0, 0, 0.4);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    margin-bottom: 30px;
+    backdrop-filter: blur(4px);
+}
+
+/* --- Glassmorphism Stats Panel --- */
+.stats {
+    width: 450px;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 16px;
+    padding: 25px;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 1.1rem;
+    color: var(--text-muted);
+}
+
+.stat-row:last-of-type {
+    border-bottom: none;
+    margin-bottom: 15px;
+}
+
+/* Monospaced data readouts */
+.val {
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: 600;
+    color: var(--quantum-blue);
+    text-shadow: 0 0 8px rgba(0, 229, 255, 0.3);
+}
+
+/* --- Controls --- */
+.button {
+    width: 100%;
+    background: transparent;
+    color: var(--quantum-blue);
+    border: 1px solid var(--quantum-blue);
+    padding: 14px 20px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    text-transform: uppercase;
+    box-shadow: inset 0 0 0 rgba(0, 229, 255, 0);
+}
+
+.button:hover {
+    background: var(--quantum-blue);
+    color: var(--bg-dark);
+    box-shadow: var(--quantum-glow);
+}
+
+.button:active {
+    transform: scale(0.98);
+}

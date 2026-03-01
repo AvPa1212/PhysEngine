@@ -3,75 +3,126 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Momentum: Quantum Dynamics Engine</title>
+    <title>Momentum: Quantum Dynamics</title>
+    <link rel="stylesheet" href="styles.css">
     <style>
-        body { background: #0f172a; color: #f8fafc; font-family: system-ui; display: flex; flex-direction: column; align-items: center; }
-        #canvas { border: 1px solid #334155; border-radius: 8px; background: #020617; }
-        .stats { margin-top: 20px; font-family: monospace; background: #1e293b; padding: 15px; border-radius: 8px; width: 400px; }
-        .val { color: #38bdf8; float: right; }
-        h1 { color: #38bdf8; letter-spacing: -1px; }
-        .button { background: #38bdf8; color: #0f172a; padding: 10px 20px; border-radius: 6px; cursor: pointer; border: none; font-weight: bold; margin-top: 10px; }
+        /* Ensuring the canvas is visible and dark */
+        body { background: #050914; color: white; font-family: sans-serif; text-align: center; }
+        canvas { background: #000; border: 1px solid #1a1a2e; box-shadow: 0 0 20px rgba(0,229,255,0.1); margin: 20px auto; display: block; }
+        .stats { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        .val { font-family: monospace; color: #00e5ff; font-weight: bold; }
+        .button { background: #ff3366; border: none; padding: 10px 20px; color: white; cursor: pointer; border-radius: 4px; }
+        .button:hover { background: #ff0044; }
     </style>
 </head>
 <body>
-    <h1>MOMENTUM <small style="font-size: 0.4em; opacity: 0.6;">PHASE 2 WEB</small></h1>
+    <h1>MOMENTUM <small id="status" style="color: #ff3366;">INITIALIZING...</small></h1>
+    
     <canvas id="canvas" width="600" height="300"></canvas>
     
     <div class="stats">
-        <div>Entropy: <span id="entropy" class="val">0.000000</span></div>
-        <div>Collapse Prob: <span id="prob" class="val">0.0%</span></div>
-        <div>Chaos X: <span id="chaosX" class="val">0.000</span></div>
-        <button id="collapseBtn" class="button">FORCE QUANTUM COLLAPSE</button>
+        <div class="stat-row">
+            <span>Shannon Entropy (S):</span>
+            <span id="entropy" class="val">0.000000</span>
+        </div>
+        <div class="stat-row">
+            <span>State Collapse Probability:</span>
+            <span id="prob" class="val">0.0%</span>
+        </div>
+        <div class="stat-row">
+            <span>Chaotic Stress (X):</span>
+            <span id="chaosX" class="val">0.000</span>
+        </div>
+        
+        <button id="collapseBtn" class="button">Force Quantum Collapse</button>
     </div>
 
     <script src="web_dist/MomentumCore.js"></script>
     
     <script>
-        const ctx = document.getElementById('canvas').getContext('2d');
-        
-        // Initialize the Wasm Module
-        PhysEngine().then(Module => {
-            console.log("Momentum Core Online");
+        window.onload = async () => {
+            const statusEl = document.getElementById('status');
             
-            // Create Task in Wasm Memory
-            const task = Module.Task_Create();
-            
-            // UI Elements
-            const entropyEl = document.getElementById('entropy');
-            const probEl = document.getElementById('prob');
-            const chaosXEl = document.getElementById('chaosX');
+            // 1. Identify the initializer (PhysEngine is defined in MomentumCore.js via -sEXPORT_NAME)
+            const EngineInit = (typeof PhysEngine !== 'undefined') ? PhysEngine : (typeof Module !== 'undefined' ? Module : null);
 
-            document.getElementById('collapseBtn').onclick = () => {
-                Module.Engine_PerformQuantumCollapse(task);
-                console.log("Collapse Triggered");
-            };
-
-            function update() {
-                // 1. Step the C++ Engines
-                Module.Engine_UpdateChaos(task);
-                
-                // 2. Extract Data
-                const x = Module.Task_GetPositionX(task);
-                const ex = Module.Task_GetEntropy(task);
-                const cx = Module.Task_GetStressX(task);
-                
-                // 3. Update UI
-                entropyEl.innerText = ex.toFixed(6);
-                probEl.innerText = (ex * 72).toFixed(1) + "%"; // Mock visualization scale
-                chaosXEl.innerText = cx.toFixed(3);
-
-                // 4. Render simple visualization
-                ctx.clearRect(0, 0, 600, 300);
-                ctx.fillStyle = "#38bdf8";
-                ctx.beginPath();
-                ctx.arc(300 + cx * 5, 150 + x, 10, 0, Math.PI * 2);
-                ctx.fill();
-
-                requestAnimationFrame(update);
+            if (!EngineInit) {
+                statusEl.innerText = "SOURCE NOT FOUND";
+                console.error("❌ MomentumCore.js failed to load. Check web_dist/ folder.");
+                return;
             }
 
-            update();
-        });
+            // 2. Configure WASM pathing
+            const wasmConfig = {
+                locateFile: (path) => {
+                    if (path.endsWith('.wasm')) return `web_dist/${path}`;
+                    return path;
+                }
+            };
+
+            try {
+                // 3. Initialize the module
+                const Module = await EngineInit(wasmConfig);
+                
+                // 4. THE TYPE GUARD
+                // If Task_Create is 'Pv', it means embind hasn't finished mapping types.
+                // We wait for one tick to allow Emscripten to finalize the internal bindings table.
+                if (Module.Task_Create.toString().includes('UnboundTypeError')) {
+                    console.warn("Bindings lagging... retrying in 100ms");
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+
+                statusEl.innerText = "PHASE 2 WEB ONLINE";
+                statusEl.style.color = "#00e5ff";
+                console.log("🚀 Quantum Engine Linked successfully.");
+
+                const task = Module.Task_Create();
+                const canvas = document.getElementById('canvas');
+                const ctx = canvas.getContext('2d');
+
+                document.getElementById('collapseBtn').onclick = () => {
+                    Module.Engine_PerformQuantumCollapse(task);
+                    console.log("✨ Quantum Collapse Triggered");
+                };
+
+                function update() {
+                    Module.Engine_UpdateChaos(task);
+                    
+                    const ex = Module.Task_GetEntropy(task);
+                    const cx = Module.Task_GetStressX(task);
+                    const x = Module.Task_GetPositionX(task);
+
+                    document.getElementById('entropy').innerText = ex.toFixed(6);
+                    document.getElementById('prob').innerText = (ex * 72).toFixed(1) + "%"; 
+                    document.getElementById('chaosX').innerText = cx.toFixed(3);
+
+                    // Fade effect for the attractor trails
+                    ctx.fillStyle = "rgba(5, 9, 20, 0.1)"; 
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    // Draw the particle
+                    ctx.fillStyle = "#00e5ff";
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = "#00e5ff";
+                    ctx.beginPath();
+                    ctx.arc(300 + (cx * 15), 150 + x, 2, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+
+                    requestAnimationFrame(update);
+                }
+                update();
+
+            } catch (err) {
+                statusEl.innerText = "BINDING ERROR";
+                console.error("Initialization Failed:", err);
+                
+                // Detailed debug hint for the 'Pv' error
+                if (err.message && err.message.includes('Pv')) {
+                    console.error("HINT: The 'Pv' error means C++ pointers aren't being mapped. Ensure deploy_web.py is using -lembind!");
+                }
+            }
+        };
     </script>
 </body>
 </html>

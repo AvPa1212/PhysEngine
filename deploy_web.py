@@ -1,67 +1,64 @@
 import os
-import subprocess
 import shutil
-import http.server
-import socketserver
-import sys
+import subprocess
 
-PORT = 8000
-ROOT_DIR = os.getcwd()
-BUILD_DIR = os.path.join(ROOT_DIR, "build_web")
-DIST_DIR = os.path.join(ROOT_DIR, "web_dist")
+# --- CONFIGURATION ---
+PROJECT_ROOT = os.getcwd()
+BUILD_DIR = os.path.join(PROJECT_ROOT, "build_web")
+DIST_DIR = os.path.join(PROJECT_ROOT, "web_dist")
 
-def run_command(command, cwd=ROOT_DIR):
-    """Helper to run shell commands and catch errors."""
-    print(f"\n>>> Running: {command}")
-    result = subprocess.run(command, shell=True, cwd=cwd)
+def run_cmd(cmd, cwd=None):
+    print(f"\n>>> Running: {cmd}")
+    # Using env to ensure Emscripten is found if not in global path
+    result = subprocess.run(cmd, shell=True, cwd=cwd)
     if result.returncode != 0:
-        print(f"❌ Error executing: {command}")
-        print("Did you forget to run 'source ~/emsdk/emsdk_env.sh' first?")
-        sys.exit(1)
+        print(f"❌ Error executing: {cmd}")
+        exit(1)
 
-def build_wasm():
+def main():
+    # 1. Force Clean Slate
+    # This is crucial because Emscripten can cache old 'void*' type information
+    print("--- STEP 0: Cleaning previous builds ---")
+    for folder in [BUILD_DIR, DIST_DIR]:
+        if os.path.exists(folder):
+            shutil.rmtree(folder)
+        os.makedirs(folder)
+
+    # 2. Build the C++ Engine via Emcmake
+    # Note: We pass -lembind through CXXFLAGS to ensure it's picked up
     print("\n--- STEP 1: Building WebAssembly Module ---")
-    os.makedirs(BUILD_DIR, exist_ok=True)
-    os.makedirs(DIST_DIR, exist_ok=True)
     
-    # Run Emscripten CMake and Make
-    run_command("emcmake cmake ..", cwd=BUILD_DIR)
-    run_command("emmake make", cwd=BUILD_DIR)
+    # We set -lembind here as a backup in case CMakeLists doesn't have it
+    em_cmake_cmd = 'emcmake cmake .. -DCMAKE_CXX_FLAGS="-lembind" -DCMAKE_EXE_LINKER_FLAGS="-lembind -sALLOW_MEMORY_GROWTH=1"'
 
-def package_files():
-    print("\n--- STEP 2: Packaging Files for Web ---")
-    files_to_copy = ["MomentumCore.js", "MomentumCore.wasm"]
-    
-    for file_name in files_to_copy:
-        src = os.path.join(BUILD_DIR, file_name)
-        dst = os.path.join(DIST_DIR, file_name)
+    run_cmd(em_cmake_cmd, cwd=BUILD_DIR)
+    run_cmd("emmake make", cwd=BUILD_DIR)
+
+    # 3. Verify Artifacts
+    print("\n--- STEP 2: Verifying Engine Output ---")
+    js_path = os.path.join(DIST_DIR, "MomentumCore.js")
+    wasm_path = os.path.join(DIST_DIR, "MomentumCore.wasm")
+
+    if os.path.exists(js_path) and os.path.exists(wasm_path):
+        print(f"✅ Engine components verified in {DIST_DIR}")
         
-        if os.path.exists(src):
-            shutil.copy2(src, dst)
-            print(f"✅ Packaged: {file_name} -> web_dist/")
-        else:
-            print(f"❌ Missing expected build artifact: {src}")
-            sys.exit(1)
+        # FINAL SANITY CHECK: Look for the name in the generated JS
+        with open(js_path, 'r') as f:
+            content = f.read()
+            if "PhysEngine" in content:
+                print("✅ Export Name 'PhysEngine' confirmed in JS.")
+            else:
+                print("⚠️ Warning: 'PhysEngine' not found in JS. Check CMakeLinker flags.")
+    else:
+        print(f"❌ Missing build artifacts in {DIST_DIR}!")
+        print(f"Expected: {js_path}")
+        exit(1)
 
-def start_server():
-    print("\n--- STEP 3: Starting Local Web Server ---")
-    Handler = http.server.SimpleHTTPRequestHandler
-    
-    # Ensure .wasm files are served with the correct MIME type
-    Handler.extensions_map.update({
-        '.wasm': 'application/wasm',
-    })
-
-    socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(("", PORT), Handler) as httpd:
-        print(f"🚀 Momentum Web Server running at: http://localhost:{PORT}")
-        print("Press Ctrl+C to stop the server.")
-        try:
-            httpd.serve_forever()
-        except KeyboardInterrupt:
-            print("\nShutting down server...")
+    # 4. Final instructions
+    print("\n--- STEP 3: DEPLOYMENT COMPLETE ---")
+    print("1. Kill any existing server (Ctrl+C)")
+    print("2. Run: python3 -m http.server 8000")
+    print("3. CRITICAL: Hard Refresh Browser (Ctrl+F5) to clear cached WASM")
 
 if __name__ == "__main__":
-    build_wasm()
-    package_files()
-    start_server()
+    main()

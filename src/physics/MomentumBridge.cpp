@@ -1,4 +1,5 @@
 #include "physics/MomentumBridge.h"
+#include "physics/Task.hpp"            // Corrected: This contains the actual Task struct
 #include "physics/ClassicalEngine.hpp"
 #include "physics/ChaosEngine.hpp"
 #include "physics/QuantumEngine.hpp"
@@ -9,123 +10,80 @@
 using namespace emscripten;
 #endif
 
-extern "C" {
-
-    // --- Task Lifecycle ---
-    void* Task_Create() {
-        return static_cast<void*>(new Task());
+// --- Internal C++ Logic (Namespaced to ensure Embind sees the C++ types clearly) ---
+namespace Bridge {
+    // We explicitly return Task* (the concrete type)
+    Task* Create() {
+        return new Task();
     }
 
-    void Task_Destroy(void* taskPtr) {
-        if (taskPtr) {
-            delete static_cast<Task*>(taskPtr);
+    double GetPositionX(Task* task) {
+        return (task != nullptr) ? task->position.x : 0.0;
+    }
+
+    double GetEntropy(Task* task) {
+        return (task != nullptr) ? task->entropy : 0.0;
+    }
+
+    double GetStressX(Task* task) {
+        return (task != nullptr) ? task->stressX : 0.0;
+    }
+
+    void UpdateChaos(Task* task) {
+        if (task) {
+            ChaosEngine::update(*task);
         }
     }
 
-    // --- Classical Mechanics ---
-    void Task_SetPosition(void* taskPtr, double x, double y) {
-        if (taskPtr) {
-            auto* task = static_cast<Task*>(taskPtr);
-            task->position.x = x;
-            task->position.y = y;
-        }
-    }
-
-    void Task_SetVelocity(void* taskPtr, double vx, double vy) {
-        if (taskPtr) {
-            auto* task = static_cast<Task*>(taskPtr);
-            task->velocity.x = vx;
-            task->velocity.y = vy;
-        }
-    }
-
-    void Task_SetMass(void* taskPtr, double mass) {
-        if (taskPtr) {
-            static_cast<Task*>(taskPtr)->mass = mass;
-        }
-    }
-
-    // --- Chaotic Subsystem (Lorenz) ---
-    void Task_SetStress(void* taskPtr, double sx, double sy, double sz) {
-        if (taskPtr) {
-            auto* task = static_cast<Task*>(taskPtr);
-            task->stressX = sx;
-            task->stressY = sy;
-            task->stressZ = sz;
-        }
-    }
-
-    // --- Getters ---
-    double Task_GetPositionX(void* taskPtr) {
-        return taskPtr ? static_cast<Task*>(taskPtr)->position.x : 0.0;
-    }
-
-    double Task_GetPositionY(void* taskPtr) {
-        return taskPtr ? static_cast<Task*>(taskPtr)->position.y : 0.0;
-    }
-
-    double Task_GetStressX(void* taskPtr) {
-        return taskPtr ? static_cast<Task*>(taskPtr)->stressX : 0.0;
-    }
-
-    double Task_GetStressY(void* taskPtr) {
-        return taskPtr ? static_cast<Task*>(taskPtr)->stressY : 0.0;
-    }
-
-    double Task_GetStressZ(void* taskPtr) {
-        return taskPtr ? static_cast<Task*>(taskPtr)->stressZ : 0.0;
-    }
-
-    double Task_GetEntropy(void* taskPtr) {
-        return taskPtr ? static_cast<Task*>(taskPtr)->entropy : 0.0;
-    }
-
-    // --- Execution Engines ---
-    void Engine_IntegrateClassical(void* taskPtr) {
-        if (taskPtr) {
-            ClassicalEngine::integrateRK4(*static_cast<Task*>(taskPtr));
-        }
-    }
-
-    void Engine_UpdateChaos(void* taskPtr) {
-        if (taskPtr) {
-            ChaosEngine::update(*static_cast<Task*>(taskPtr));
-        }
-    }
-
-    // --- Quantum Dynamics Engine ---
-    double Task_GetCollapseProbability(void* taskPtr) {
-        if (!taskPtr) return 0.0;
-        auto* task = static_cast<Task*>(taskPtr);
-        
-        // Momentum Blueprint: Probability is tied to current quantum state norm
-        // Often correlated with entropy in chaotic regimes
-        return QuantumEngine::calculateCollapseProbability(*task);
-    }
-
-    void Engine_PerformQuantumCollapse(void* taskPtr) {
-        if (taskPtr) {
-            auto* task = static_cast<Task*>(taskPtr);
-            
-            // Forces state vector to a pure basis state (Entropy -> 0)
+    void Collapse(Task* task) {
+        if (task) {
             QuantumEngine::collapse(*task);
-            
-            // Classical reaction to collapse (Momentum Blueprint)
-            // A collapse typically causes a sudden "nudge" in classical velocity
-            task->velocity.y += 5.0; 
+            // Visual feedback: a sudden velocity change
+            task->velocity.y += 5.0;
         }
+    }
+}
+
+// --- Desktop/Python compatibility layer (extern "C") ---
+extern "C" {
+    MOMENTUM_API Task* Task_Create() { 
+        return Bridge::Create(); 
+    }
+    
+    MOMENTUM_API double Task_GetPositionX(Task* t) { 
+        return Bridge::GetPositionX(t); 
+    }
+    
+    MOMENTUM_API double Task_GetEntropy(Task* t) { 
+        return Bridge::GetEntropy(t); 
+    }
+    
+    MOMENTUM_API double Task_GetStressX(Task* t) { 
+        return Bridge::GetStressX(t); 
+    }
+    
+    MOMENTUM_API void Engine_UpdateChaos(Task* t) { 
+        Bridge::UpdateChaos(t); 
+    }
+    
+    MOMENTUM_API void Engine_PerformQuantumCollapse(Task* t) { 
+        Bridge::Collapse(t); 
     }
 }
 
 // --- WebAssembly Bindings (Emscripten Only) ---
 #ifdef __EMSCRIPTEN__
-EMSCRIPTEN_BINDINGS(momentum_web_bridge) {
-    function("Task_Create", &Task_Create, allow_raw_pointers());
-    function("Task_Destroy", &Task_Destroy, allow_raw_pointers());
-    function("Task_SetPosition", &Task_SetPosition, allow_raw_pointers());
-    function("Task_GetPositionX", &Task_GetPositionX, allow_raw_pointers());
-    function("Task_GetEntropy", &Task_GetEntropy, allow_raw_pointers());
-    function("Engine_UpdateChaos", &Engine_UpdateChaos, allow_raw_pointers());
-    function("Engine_PerformQuantumCollapse", &Engine_PerformQuantumCollapse, allow_raw_pointers());
+EMSCRIPTEN_BINDINGS(momentum_module) {
+    // Register the Task class. 
+    // Embind now knows that 'Task*' corresponds to this registered name.
+    class_<Task>("Task");
+
+    // Bind to the Bridge namespace functions to avoid the 'void*' ambiguity of C symbols
+    function("Task_Create", &Bridge::Create, allow_raw_pointers());
+    function("Task_GetPositionX", &Bridge::GetPositionX, allow_raw_pointers());
+    function("Task_GetEntropy", &Bridge::GetEntropy, allow_raw_pointers());
+    function("Task_GetStressX", &Bridge::GetStressX, allow_raw_pointers());
+    function("Engine_UpdateChaos", &Bridge::UpdateChaos, allow_raw_pointers());
+    function("Engine_PerformQuantumCollapse", &Bridge::Collapse, allow_raw_pointers());
 }
 #endif
