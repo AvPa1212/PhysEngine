@@ -60,5 +60,30 @@ def main():
     print("2. Run: python3 -m http.server 8000")
     print("3. CRITICAL: Hard Refresh Browser (Ctrl+F5) to clear cached WASM")
 
+def deploy_to_react():
+    print("\n--- Deploying WASM to React UI ---")
+    
+    # Define Source and Destination paths
+    source_dir = "web_dist"
+    dest_dir = "momentum-ui/public/web_dist"
+    files_to_copy = ["MomentumCore.js", "MomentumCore.wasm"]
+
+    # 1. Ensure the destination directory exists
+    if not os.path.exists(dest_dir):
+        os.makedirs(dest_dir)
+        print(f"Created directory: {dest_dir}")
+
+    # 2. Copy the files
+    for filename in files_to_copy:
+        src_path = os.path.join(source_dir, filename)
+        dest_path = os.path.join(dest_dir, filename)
+        
+        if os.path.exists(src_path):
+            shutil.copy2(src_path, dest_path)
+            print(f"Successfully deployed: {filename} -> {dest_dir}")
+        else:
+            print(f"Warning: {src_path} not found. Build may have failed.")
+
 if __name__ == "__main__":
     main()
+    deploy_to_react()

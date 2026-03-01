@@ -1,0 +1,196 @@
+:root {
+  --bg-dark: #050914;
+  --panel-bg: rgba(10, 15, 30, 0.85);
+  --neon-cyan: #00e5ff;
+  --neon-orange: #ff7700;
+  --neon-pink: #ff3366;
+  --text-dim: #a0a0c0;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-dark);
+  background-image: 
+    radial-gradient(circle at 50% 50%, #111a30 0%, #050914 100%);
+  color: white;
+  font-family: 'Segoe UI', 'Courier New', monospace;
+  overflow-x: hidden;
+}
+
+.app-container {
+  padding: 40px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Header & Thermodynamics Meter */
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(0, 229, 255, 0.2);
+  padding-bottom: 20px;
+  margin-bottom: 30px;
+}
+
+h1 {
+  letter-spacing: 4px;
+  margin: 0;
+  text-shadow: 0 0 10px var(--neon-cyan);
+}
+
+h1 small {
+  font-size: 0.4em;
+  color: var(--text-dim);
+  display: block;
+}
+
+.thermo-meter {
+  width: 300px;
+  text-align: right;
+}
+
+.thermo-meter span {
+  font-size: 0.8em;
+  color: var(--neon-pink);
+  font-weight: bold;
+}
+
+.bar {
+  height: 6px;
+  background: #1a1a2e;
+  border-radius: 3px;
+  margin-top: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 51, 102, 0.3);
+}
+
+.fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--neon-cyan), var(--neon-pink));
+  box-shadow: 0 0 10px var(--neon-pink);
+  transition: width 0.5s ease-out;
+}
+
+/* Input Area */
+.input-area {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 40px;
+}
+
+input {
+  flex: 1;
+  background: var(--panel-bg);
+  border: 1px solid var(--neon-cyan);
+  padding: 15px;
+  color: white;
+  border-radius: 4px;
+  outline: none;
+}
+
+input:focus {
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.3);
+}
+
+button {
+  background: transparent;
+  border: 1px solid var(--neon-cyan);
+  color: var(--neon-cyan);
+  padding: 10px 20px;
+  cursor: pointer;
+  text-transform: uppercase;
+  font-weight: bold;
+  transition: 0.2s;
+}
+
+button:hover {
+  background: var(--neon-cyan);
+  color: black;
+  box-shadow: 0 0 15px var(--neon-cyan);
+}
+
+/* Task Grid */
+.task-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 25px;
+}
+
+.task-card {
+  background: var(--panel-bg);
+  border-radius: 8px;
+  border-left: 4px solid var(--neon-orange);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 119, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.task-viz {
+  height: 200px;
+  width: 100%;
+  margin-bottom: 15px;
+  background: radial-gradient(circle at center, #0a0f1e 0%, transparent 70%);
+}
+
+.task-info h3 {
+  margin: 0 0 10px 0;
+  color: white;
+  font-size: 1.2em;
+}
+
+.task-info p {
+  font-size: 0.85em;
+  margin: 5px 0;
+  color: var(--text-dim);
+}
+
+.neon-text { color: var(--neon-cyan); text-shadow: 0 0 5px var(--neon-cyan); }
+.orange-text { color: var(--neon-orange); text-shadow: 0 0 5px var(--neon-orange); }
+
+.done-btn {
+  margin-top: 15px;
+  border-color: var(--neon-pink);
+  color: var(--neon-pink);
+  width: 100%;
+}
+
+.done-btn:hover {
+  background: var(--neon-pink);
+  color: white;
+  box-shadow: 0 0 15px var(--neon-pink);
+}
+
+.loader {
+  display: flex;
+  height: 100vh;
+  justify-content: center;
+  align-items: center;
+  font-size: 2em;
+  color: var(--neon-cyan);
+  letter-spacing: 5px;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.3; }
+  50% { opacity: 1; }
+  100% { opacity: 0.3; }
+}
+
+.burnout-shake {
+  animation: shake 0.2s infinite;
+}
+
+@keyframes shake {
+  0% { transform: translate(1px, 1px) rotate(0deg); }
+  25% { transform: translate(-1px, -2px) rotate(-0.1deg); }
+  50% { transform: translate(-3px, 0px) rotate(0.1deg); }
+  75% { transform: translate(3px, 2px) rotate(0deg); }
+  100% { transform: translate(1px, -1px) rotate(-0.1deg); }
+}

@@ -4,123 +4,332 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Momentum: Quantum Dynamics</title>
-    <link rel="stylesheet" href="styles.css">
     <style>
-        /* Ensuring the canvas is visible and dark */
-        body { background: #050914; color: white; font-family: sans-serif; text-align: center; }
-        canvas { background: #000; border: 1px solid #1a1a2e; box-shadow: 0 0 20px rgba(0,229,255,0.1); margin: 20px auto; display: block; }
-        .stats { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-        .val { font-family: monospace; color: #00e5ff; font-weight: bold; }
-        .button { background: #ff3366; border: none; padding: 10px 20px; color: white; cursor: pointer; border-radius: 4px; }
-        .button:hover { background: #ff0044; }
+        :root { --neon: #00e5ff; --alert: #ff3366; --orange: #ff7700; --bg: #050914; }
+        body { background: var(--bg); color: white; font-family: monospace; margin: 0; overflow: hidden; user-select: none; }
+        
+        #container { position: relative; width: 100vw; height: 100vh; }
+        canvas { display: block; position: absolute; top: 0; left: 0; }
+        #canvas2d { z-index: 5; background: radial-gradient(circle at center, #111a30 0%, #000 100%); }
+        
+        /* UI Overlays */
+        #hud { position: absolute; top: 20px; left: 20px; z-index: 10; pointer-events: none; display: flex; flex-direction: column; gap: 15px; }
+        h1 { margin: 0; font-family: sans-serif; letter-spacing: 2px; }
+        
+        .panel { background: rgba(10, 15, 30, 0.8); padding: 15px; border-radius: 6px; border-left: 4px solid var(--neon); backdrop-filter: blur(5px); pointer-events: auto; min-width: 260px; border-right: 1px solid rgba(0, 229, 255, 0.2); border-bottom: 1px solid rgba(0, 229, 255, 0.2); }
+        .panel.orange-theme { border-left-color: var(--orange); border-right-color: rgba(255, 119, 0, 0.2); border-bottom-color: rgba(255, 119, 0, 0.2); }
+        
+        .stat-row { display: flex; justify-content: space-between; margin-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 2px; }
+        .val { color: var(--neon); font-weight: bold; }
+        .val.orange { color: var(--orange); }
+        
+        /* Sliders */
+        .slider-group { margin-top: 10px; display: flex; flex-direction: column; gap: 5px; }
+        .slider-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.9em; }
+        input[type=range] { width: 120px; accent-color: var(--orange); }
+
+        .toolbar { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 10; display: flex; gap: 10px; pointer-events: auto; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; backdrop-filter: blur(5px); }
+        .btn { background: #1a1a2e; border: 1px solid var(--neon); color: var(--neon); padding: 10px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; transition: 0.2s; font-family: monospace; text-transform: uppercase; }
+        .btn:hover { background: var(--neon); color: black; box-shadow: 0 0 15px var(--neon); }
+        .btn.danger { border-color: var(--alert); color: var(--alert); }
+        .btn.danger:hover { background: var(--alert); color: white; box-shadow: 0 0 15px var(--alert); }
+
+        #flash { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: white; opacity: 0; z-index: 999; pointer-events: none; transition: opacity 0.8s ease-out; }
+        .flashing { opacity: 0.8 !important; transition: none !important; }
     </style>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
 </head>
 <body>
-    <h1>MOMENTUM <small id="status" style="color: #ff3366;">INITIALIZING...</small></h1>
-    
-    <canvas id="canvas" width="600" height="300"></canvas>
-    
-    <div class="stats">
-        <div class="stat-row">
-            <span>Shannon Entropy (S):</span>
-            <span id="entropy" class="val">0.000000</span>
-        </div>
-        <div class="stat-row">
-            <span>State Collapse Probability:</span>
-            <span id="prob" class="val">0.0%</span>
-        </div>
-        <div class="stat-row">
-            <span>Chaotic Stress (X):</span>
-            <span id="chaosX" class="val">0.000</span>
-        </div>
+
+    <div id="container">
+        <div id="flash"></div>
+        <canvas id="canvas2d"></canvas>
         
-        <button id="collapseBtn" class="button">Force Quantum Collapse</button>
+        <div id="hud">
+            <h1>MOMENTUM <small id="status" style="color: var(--alert);">INITIALIZING...</small></h1>
+            
+            <div class="panel">
+                <div class="stat-row"><span>State:</span><span id="stateTxt" class="val">WAITING</span></div>
+                <div class="stat-row"><span>Entropy (S):</span><span id="entropy" class="val">0.000000</span></div>
+                <div class="stat-row"><span>Collapse Prob:</span><span id="prob" class="val">0.0%</span></div>
+                <div class="stat-row"><span>Time Since Collapse:</span><span id="timeSince" class="val orange">0.0s</span></div>
+            </div>
+
+            <div class="panel">
+                <div class="stat-row"><span>Chaos X:</span><span id="chaosX" class="val">0.000</span></div>
+                <div class="stat-row"><span>Chaos Y:</span><span id="chaosY" class="val">0.000</span></div>
+                <div class="stat-row"><span>Chaos Z:</span><span id="chaosZ" class="val">0.000</span></div>
+            </div>
+
+            <div class="panel orange-theme">
+                <div style="color: var(--orange); font-weight: bold; margin-bottom: 5px;">MANUAL OVERRIDES</div>
+                <div class="slider-group">
+                    <div class="slider-row">
+                        <span>Mass</span>
+                        <input type="range" id="sliderMass" min="0.1" max="10" step="0.1" value="1.0">
+                    </div>
+                    <div class="slider-row">
+                        <span>Stress X Inject</span>
+                        <input type="range" id="sliderStressX" min="-20" max="20" step="0.5" value="0.0">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <button id="btnToggle" class="btn">View: 2D Radar</button>
+            <button id="btnPause" class="btn">Pause</button>
+            <button id="btnClear" class="btn">Clear Trails</button>
+            <button id="btnCollapse" class="btn danger">Force Quantum Collapse</button>
+        </div>
     </div>
 
     <script src="web_dist/MomentumCore.js"></script>
     
-    <script>
-        window.onload = async () => {
-            const statusEl = document.getElementById('status');
-            
-            // 1. Identify the initializer (PhysEngine is defined in MomentumCore.js via -sEXPORT_NAME)
-            const EngineInit = (typeof PhysEngine !== 'undefined') ? PhysEngine : (typeof Module !== 'undefined' ? Module : null);
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-            if (!EngineInit) {
-                statusEl.innerText = "SOURCE NOT FOUND";
-                console.error("❌ MomentumCore.js failed to load. Check web_dist/ folder.");
-                return;
+        let is3D = false;
+        let isPaused = false;
+        let ticks = 0;
+        let ticksSinceCollapse = 0;
+        
+        let scene, camera, renderer, controls, particle, trail, shockwave;
+        const MAX_POINTS = 2000;
+        let pointHistory = [];
+
+        const canvas2d = document.getElementById('canvas2d');
+        const ctx2d = canvas2d.getContext('2d');
+
+        // Particle Glow Shader
+        const vertexShader = `
+            varying vec3 vNormal;
+            void main() {
+                vNormal = normalize(normalMatrix * normal);
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
             }
+        `;
+        const fragmentShader = `
+            varying vec3 vNormal;
+            void main() {
+                float intensity = pow(0.7 - dot(vNormal, vec3(0, 0, 1.0)), 3.0);
+                gl_FragColor = vec4(1.0, 0.46, 0.0, 1.0) * intensity; // Orange hue
+            }
+        `;
 
-            // 2. Configure WASM pathing
-            const wasmConfig = {
-                locateFile: (path) => {
-                    if (path.endsWith('.wasm')) return `web_dist/${path}`;
-                    return path;
-                }
-            };
+        function initGraphics() {
+            canvas2d.width = window.innerWidth;
+            canvas2d.height = window.innerHeight;
+
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 80);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.domElement.style.zIndex = "1";
+            renderer.domElement.style.position = "absolute";
+            document.getElementById('container').appendChild(renderer.domElement);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+
+            const pGeo = new THREE.SphereGeometry(1.5, 32, 32);
+            const pMat = new THREE.ShaderMaterial({
+                vertexShader: vertexShader,
+                fragmentShader: fragmentShader,
+                blending: THREE.AdditiveBlending,
+                transparent: true
+            });
+            particle = new THREE.Mesh(pGeo, pMat);
+            scene.add(particle);
+
+            const tGeo = new THREE.BufferGeometry();
+            tGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAX_POINTS * 3), 3));
+            // Updated trail color to high-visibility orange
+            const tMat = new THREE.LineBasicMaterial({ color: 0xff7700, transparent: true, opacity: 0.8 });
+            trail = new THREE.Line(tGeo, tMat);
+            scene.add(trail);
+
+            const sGeo = new THREE.SphereGeometry(1, 32, 32);
+            const sMat = new THREE.MeshBasicMaterial({ color: 0xff3366, transparent: true, opacity: 0, wireframe: true });
+            shockwave = new THREE.Mesh(sGeo, sMat);
+            scene.add(shockwave);
+
+            renderer.domElement.style.display = 'none';
+            canvas2d.style.display = 'block';
+        }
+
+        function triggerCollapseVisuals() {
+            const flash = document.getElementById('flash');
+            flash.classList.add('flashing');
+            setTimeout(() => flash.classList.remove('flashing'), 50);
+
+            if (is3D) {
+                shockwave.position.copy(particle.position);
+                shockwave.scale.set(1, 1, 1);
+                shockwave.material.opacity = 0.8;
+            }
+            
+            // Reset the collapse timer
+            ticksSinceCollapse = 0;
+        }
+
+        window.onload = async () => {
+            initGraphics();
+            const statusEl = document.getElementById('status');
+
+            const EngineInit = (typeof window.PhysEngine !== 'undefined') ? window.PhysEngine : null;
+            if (!EngineInit) return;
 
             try {
-                // 3. Initialize the module
-                const Module = await EngineInit(wasmConfig);
-                
-                // 4. THE TYPE GUARD
-                // If Task_Create is 'Pv', it means embind hasn't finished mapping types.
-                // We wait for one tick to allow Emscripten to finalize the internal bindings table.
+                const Module = await EngineInit({
+                    locateFile: (path) => path.endsWith('.wasm') ? `web_dist/${path}` : path
+                });
+
                 if (Module.Task_Create.toString().includes('UnboundTypeError')) {
-                    console.warn("Bindings lagging... retrying in 100ms");
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                    await new Promise(r => setTimeout(r, 100));
                 }
 
-                statusEl.innerText = "PHASE 2 WEB ONLINE";
+                statusEl.innerText = "SYSTEMS ONLINE";
                 statusEl.style.color = "#00e5ff";
-                console.log("🚀 Quantum Engine Linked successfully.");
+                document.getElementById('stateTxt').innerText = "RUNNING";
 
                 const task = Module.Task_Create();
-                const canvas = document.getElementById('canvas');
-                const ctx = canvas.getContext('2d');
 
-                document.getElementById('collapseBtn').onclick = () => {
+                // Connect Sliders to WASM
+                const sliderMass = document.getElementById('sliderMass');
+                const sliderStressX = document.getElementById('sliderStressX');
+                
+                sliderMass.oninput = (e) => {
+                    if (Module.Task_SetMass) Module.Task_SetMass(task, parseFloat(e.target.value));
+                };
+                
+                sliderStressX.oninput = (e) => {
+                    const currentY = typeof Module.Task_GetStressY === 'function' ? Module.Task_GetStressY(task) : 0;
+                    const currentZ = typeof Module.Task_GetStressZ === 'function' ? Module.Task_GetStressZ(task) : 0;
+                    if (Module.Task_SetStress) Module.Task_SetStress(task, parseFloat(e.target.value), currentY, currentZ);
+                };
+
+                // UI Listeners
+                document.getElementById('btnToggle').onclick = (e) => {
+                    is3D = !is3D;
+                    e.target.innerText = is3D ? "View: 3D Space" : "View: 2D Radar";
+                    renderer.domElement.style.display = is3D ? 'block' : 'none';
+                    canvas2d.style.display = is3D ? 'none' : 'block';
+                };
+
+                document.getElementById('btnPause').onclick = (e) => {
+                    isPaused = !isPaused;
+                    e.target.innerText = isPaused ? "Resume" : "Pause";
+                    document.getElementById('stateTxt').innerText = isPaused ? "PAUSED" : "RUNNING";
+                    document.getElementById('stateTxt').style.color = isPaused ? "#ffaa00" : "#00e5ff";
+                };
+
+                document.getElementById('btnClear').onclick = () => {
+                    pointHistory = [];
+                    ctx2d.clearRect(0, 0, canvas2d.width, canvas2d.height);
+                };
+
+                document.getElementById('btnCollapse').onclick = () => {
                     Module.Engine_PerformQuantumCollapse(task);
-                    console.log("✨ Quantum Collapse Triggered");
+                    triggerCollapseVisuals();
                 };
 
                 function update() {
-                    Module.Engine_UpdateChaos(task);
-                    
-                    const ex = Module.Task_GetEntropy(task);
-                    const cx = Module.Task_GetStressX(task);
-                    const x = Module.Task_GetPositionX(task);
-
-                    document.getElementById('entropy').innerText = ex.toFixed(6);
-                    document.getElementById('prob').innerText = (ex * 72).toFixed(1) + "%"; 
-                    document.getElementById('chaosX').innerText = cx.toFixed(3);
-
-                    // Fade effect for the attractor trails
-                    ctx.fillStyle = "rgba(5, 9, 20, 0.1)"; 
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    
-                    // Draw the particle
-                    ctx.fillStyle = "#00e5ff";
-                    ctx.shadowBlur = 10;
-                    ctx.shadowColor = "#00e5ff";
-                    ctx.beginPath();
-                    ctx.arc(300 + (cx * 15), 150 + x, 2, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.shadowBlur = 0;
-
                     requestAnimationFrame(update);
+                    if (is3D) controls.update();
+
+                    if (shockwave.material.opacity > 0) {
+                        shockwave.scale.addScalar(1.5);
+                        shockwave.material.opacity -= 0.02;
+                    }
+
+                    if (isPaused) return;
+
+                    Module.Engine_UpdateChaos(task);
+                    ticks++;
+                    ticksSinceCollapse++;
+
+                    const ex = Module.Task_GetEntropy(task);
+                    const probValue = ex * 72;
+                    
+                    // --- AUTO-COLLAPSE LOGIC ---
+                    if (probValue >= 100.0) {
+                        Module.Engine_PerformQuantumCollapse(task);
+                        triggerCollapseVisuals();
+                    }
+
+                    const cx = Module.Task_GetStressX(task);
+                    const cy = typeof Module.Task_GetStressY === 'function' ? Module.Task_GetStressY(task) : Module.Task_GetPositionX(task);
+                    const cz = typeof Module.Task_GetStressZ === 'function' ? Module.Task_GetStressZ(task) : (ex * 10);
+
+                    if (ticks % 3 === 0) { 
+                        document.getElementById('entropy').innerText = ex.toFixed(6);
+                        document.getElementById('prob').innerText = probValue.toFixed(1) + "%"; 
+                        document.getElementById('timeSince').innerText = (ticksSinceCollapse / 60).toFixed(1) + "s";
+                        document.getElementById('chaosX').innerText = cx.toFixed(3);
+                        document.getElementById('chaosY').innerText = cy.toFixed(3);
+                        document.getElementById('chaosZ').innerText = cz.toFixed(3);
+                    }
+
+                    if (is3D) {
+                        particle.position.set(cx, cy, cz - 25);
+                        
+                        pointHistory.push(cx, cy, cz - 25);
+                        if (pointHistory.length > MAX_POINTS * 3) pointHistory.splice(0, 3);
+                        
+                        const posAttr = trail.geometry.attributes.position;
+                        for (let i = 0; i < pointHistory.length / 3; i++) {
+                            posAttr.setXYZ(i, pointHistory[i*3], pointHistory[i*3+1], pointHistory[i*3+2]);
+                        }
+                        posAttr.needsUpdate = true;
+                        trail.geometry.setDrawRange(0, pointHistory.length / 3);
+                        
+                        renderer.render(scene, camera);
+                    } else {
+                        ctx2d.fillStyle = "rgba(5, 9, 20, 0.08)"; 
+                        ctx2d.fillRect(0, 0, canvas2d.width, canvas2d.height);
+                        
+                        const centerX = canvas2d.width / 2;
+                        const centerY = canvas2d.height / 2;
+                        const scale = 8; 
+                        
+                        // Updated 2D color to Orange
+                        ctx2d.fillStyle = "#ff7700";
+                        ctx2d.shadowBlur = 10;
+                        ctx2d.shadowColor = "#ff7700";
+                        ctx2d.beginPath();
+                        ctx2d.arc(centerX + (cx * scale), centerY + (cy * scale), 2, 0, Math.PI * 2);
+                        ctx2d.fill();
+                        ctx2d.shadowBlur = 0;
+                    }
                 }
                 update();
 
             } catch (err) {
-                statusEl.innerText = "BINDING ERROR";
-                console.error("Initialization Failed:", err);
-                
-                // Detailed debug hint for the 'Pv' error
-                if (err.message && err.message.includes('Pv')) {
-                    console.error("HINT: The 'Pv' error means C++ pointers aren't being mapped. Ensure deploy_web.py is using -lembind!");
-                }
+                console.error(err);
+                statusEl.innerText = "CRITICAL ERROR";
+            }
+        };
+
+        window.onresize = () => {
+            canvas2d.width = window.innerWidth;
+            canvas2d.height = window.innerHeight;
+            if (camera) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
             }
         };
     </script>

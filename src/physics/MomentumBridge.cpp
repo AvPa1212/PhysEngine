@@ -1,5 +1,5 @@
 #include "physics/MomentumBridge.h"
-#include "physics/Task.hpp"            // Corrected: This contains the actual Task struct
+#include "physics/Task.hpp"            // Contains the actual Task struct definition
 #include "physics/ClassicalEngine.hpp"
 #include "physics/ChaosEngine.hpp"
 #include "physics/QuantumEngine.hpp"
@@ -12,23 +12,32 @@ using namespace emscripten;
 
 // --- Internal C++ Logic (Namespaced to ensure Embind sees the C++ types clearly) ---
 namespace Bridge {
-    // We explicitly return Task* (the concrete type)
+    // Constructor / Destructor
     Task* Create() {
         return new Task();
     }
 
-    double GetPositionX(Task* task) {
-        return (task != nullptr) ? task->position.x : 0.0;
+    // Getters
+    double GetPositionX(Task* task) { return (task != nullptr) ? task->position.x : 0.0; }
+    double GetEntropy(Task* task)   { return (task != nullptr) ? task->entropy : 0.0; }
+    double GetStressX(Task* task)   { return (task != nullptr) ? task->stressX : 0.0; }
+    double GetStressY(Task* task)   { return (task != nullptr) ? task->stressY : 0.0; }
+    double GetStressZ(Task* task)   { return (task != nullptr) ? task->stressZ : 0.0; }
+
+    // Setters (For UI Manual Overrides)
+    void SetMass(Task* task, double mass) {
+        if (task) task->mass = mass;
+    }
+    
+    void SetStress(Task* task, double sx, double sy, double sz) {
+        if (task) {
+            task->stressX = sx;
+            task->stressY = sy;
+            task->stressZ = sz;
+        }
     }
 
-    double GetEntropy(Task* task) {
-        return (task != nullptr) ? task->entropy : 0.0;
-    }
-
-    double GetStressX(Task* task) {
-        return (task != nullptr) ? task->stressX : 0.0;
-    }
-
+    // Engine Commands
     void UpdateChaos(Task* task) {
         if (task) {
             ChaosEngine::update(*task);
@@ -38,13 +47,14 @@ namespace Bridge {
     void Collapse(Task* task) {
         if (task) {
             QuantumEngine::collapse(*task);
-            // Visual feedback: a sudden velocity change
+            // Visual "kick": apply upward velocity upon quantum state reduction
             task->velocity.y += 5.0;
         }
     }
 }
 
 // --- Desktop/Python compatibility layer (extern "C") ---
+// These maintain existing ABI compatibility for your Python scripts
 extern "C" {
     MOMENTUM_API Task* Task_Create() { 
         return Bridge::Create(); 
@@ -67,22 +77,29 @@ extern "C" {
     }
     
     MOMENTUM_API void Engine_PerformQuantumCollapse(Task* t) { 
-        Bridge::Collapse(t); 
+        Bridge::Collapse(t);    
     }
 }
 
 // --- WebAssembly Bindings (Emscripten Only) ---
 #ifdef __EMSCRIPTEN__
 EMSCRIPTEN_BINDINGS(momentum_module) {
-    // Register the Task class. 
-    // Embind now knows that 'Task*' corresponds to this registered name.
+    // 1. Register the Task class
     class_<Task>("Task");
 
-    // Bind to the Bridge namespace functions to avoid the 'void*' ambiguity of C symbols
+    // 2. Bind Getters
     function("Task_Create", &Bridge::Create, allow_raw_pointers());
     function("Task_GetPositionX", &Bridge::GetPositionX, allow_raw_pointers());
     function("Task_GetEntropy", &Bridge::GetEntropy, allow_raw_pointers());
     function("Task_GetStressX", &Bridge::GetStressX, allow_raw_pointers());
+    function("Task_GetStressY", &Bridge::GetStressY, allow_raw_pointers());
+    function("Task_GetStressZ", &Bridge::GetStressZ, allow_raw_pointers());
+    
+    // 3. Bind Setters
+    function("Task_SetMass", &Bridge::SetMass, allow_raw_pointers());
+    function("Task_SetStress", &Bridge::SetStress, allow_raw_pointers());
+
+    // 4. Bind Engine Actions
     function("Engine_UpdateChaos", &Bridge::UpdateChaos, allow_raw_pointers());
     function("Engine_PerformQuantumCollapse", &Bridge::Collapse, allow_raw_pointers());
 }
