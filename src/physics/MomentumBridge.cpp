@@ -9,46 +9,44 @@
 using namespace emscripten;
 #endif
 
+// We use Task* instead of void* so Emscripten can track the type
 extern "C" {
 
     // --- Task Lifecycle ---
-    void* Task_Create() {
-        return static_cast<void*>(new Task());
+    Task* Task_Create() {
+        return new Task();
     }
 
-    void Task_Destroy(void* taskPtr) {
-        if (taskPtr) {
-            delete static_cast<Task*>(taskPtr);
+    void Task_Destroy(Task* task) {
+        if (task) {
+            delete task;
         }
     }
 
     // --- Classical Mechanics ---
-    void Task_SetPosition(void* taskPtr, double x, double y) {
-        if (taskPtr) {
-            auto* task = static_cast<Task*>(taskPtr);
+    void Task_SetPosition(Task* task, double x, double y) {
+        if (task) {
             task->position.x = x;
             task->position.y = y;
         }
     }
 
-    void Task_SetVelocity(void* taskPtr, double vx, double vy) {
-        if (taskPtr) {
-            auto* task = static_cast<Task*>(taskPtr);
+    void Task_SetVelocity(Task* task, double vx, double vy) {
+        if (task) {
             task->velocity.x = vx;
             task->velocity.y = vy;
         }
     }
 
-    void Task_SetMass(void* taskPtr, double mass) {
-        if (taskPtr) {
-            static_cast<Task*>(taskPtr)->mass = mass;
+    void Task_SetMass(Task* task, double mass) {
+        if (task) {
+            task->mass = mass;
         }
     }
 
     // --- Chaotic Subsystem (Lorenz) ---
-    void Task_SetStress(void* taskPtr, double sx, double sy, double sz) {
-        if (taskPtr) {
-            auto* task = static_cast<Task*>(taskPtr);
+    void Task_SetStress(Task* task, double sx, double sy, double sz) {
+        if (task) {
             task->stressX = sx;
             task->stressY = sy;
             task->stressZ = sz;
@@ -56,62 +54,52 @@ extern "C" {
     }
 
     // --- Getters ---
-    double Task_GetPositionX(void* taskPtr) {
-        return taskPtr ? static_cast<Task*>(taskPtr)->position.x : 0.0;
+    double Task_GetPositionX(Task* task) {
+        return task ? task->position.x : 0.0;
     }
 
-    double Task_GetPositionY(void* taskPtr) {
-        return taskPtr ? static_cast<Task*>(taskPtr)->position.y : 0.0;
+    double Task_GetPositionY(Task* task) {
+        return task ? task->position.y : 0.0;
     }
 
-    double Task_GetStressX(void* taskPtr) {
-        return taskPtr ? static_cast<Task*>(taskPtr)->stressX : 0.0;
+    double Task_GetStressX(Task* task) {
+        return task ? task->stressX : 0.0;
     }
 
-    double Task_GetStressY(void* taskPtr) {
-        return taskPtr ? static_cast<Task*>(taskPtr)->stressY : 0.0;
+    double Task_GetStressY(Task* task) {
+        return task ? task->stressY : 0.0;
     }
 
-    double Task_GetStressZ(void* taskPtr) {
-        return taskPtr ? static_cast<Task*>(taskPtr)->stressZ : 0.0;
+    double Task_GetStressZ(Task* task) {
+        return task ? task->stressZ : 0.0;
     }
 
-    double Task_GetEntropy(void* taskPtr) {
-        return taskPtr ? static_cast<Task*>(taskPtr)->entropy : 0.0;
+    double Task_GetEntropy(Task* task) {
+        return task ? task->entropy : 0.0;
     }
 
     // --- Execution Engines ---
-    void Engine_IntegrateClassical(void* taskPtr) {
-        if (taskPtr) {
-            ClassicalEngine::integrateRK4(*static_cast<Task*>(taskPtr));
+    void Engine_IntegrateClassical(Task* task) {
+        if (task) {
+            ClassicalEngine::integrateRK4(*task);
         }
     }
 
-    void Engine_UpdateChaos(void* taskPtr) {
-        if (taskPtr) {
-            ChaosEngine::update(*static_cast<Task*>(taskPtr));
+    void Engine_UpdateChaos(Task* task) {
+        if (task) {
+            ChaosEngine::update(*task);
         }
     }
 
     // --- Quantum Dynamics Engine ---
-    double Task_GetCollapseProbability(void* taskPtr) {
-        if (!taskPtr) return 0.0;
-        auto* task = static_cast<Task*>(taskPtr);
-        
-        // Momentum Blueprint: Probability is tied to current quantum state norm
-        // Often correlated with entropy in chaotic regimes
+    double Task_GetCollapseProbability(Task* task) {
+        if (!task) return 0.0;
         return QuantumEngine::calculateCollapseProbability(*task);
     }
 
-    void Engine_PerformQuantumCollapse(void* taskPtr) {
-        if (taskPtr) {
-            auto* task = static_cast<Task*>(taskPtr);
-            
-            // Forces state vector to a pure basis state (Entropy -> 0)
+    void Engine_PerformQuantumCollapse(Task* task) {
+        if (task) {
             QuantumEngine::collapse(*task);
-            
-            // Classical reaction to collapse (Momentum Blueprint)
-            // A collapse typically causes a sudden "nudge" in classical velocity
             task->velocity.y += 5.0; 
         }
     }
@@ -120,10 +108,19 @@ extern "C" {
 // --- WebAssembly Bindings (Emscripten Only) ---
 #ifdef __EMSCRIPTEN__
 EMSCRIPTEN_BINDINGS(momentum_web_bridge) {
+    
+    // 1. REGISTER THE CLASS
+    // This is the "Magic Fix" for the 'Pv' error. 
+    // It tells Emscripten that Task* is a valid handle for JS.
+    class_<Task>("Task");
+
+    // 2. REGISTER THE FUNCTIONS
+    // We explicitly use allow_raw_pointers() for Task* interaction.
     function("Task_Create", &Task_Create, allow_raw_pointers());
     function("Task_Destroy", &Task_Destroy, allow_raw_pointers());
     function("Task_SetPosition", &Task_SetPosition, allow_raw_pointers());
     function("Task_GetPositionX", &Task_GetPositionX, allow_raw_pointers());
+    function("Task_GetStressX", &Task_GetStressX, allow_raw_pointers()); // Added for the UI
     function("Task_GetEntropy", &Task_GetEntropy, allow_raw_pointers());
     function("Engine_UpdateChaos", &Engine_UpdateChaos, allow_raw_pointers());
     function("Engine_PerformQuantumCollapse", &Engine_PerformQuantumCollapse, allow_raw_pointers());
