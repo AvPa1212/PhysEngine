@@ -95,6 +95,16 @@
                     document.getElementById('entropy').innerText = ex.toFixed(6);
                     document.getElementById('prob').innerText = (ex * 72).toFixed(1) + "%"; 
                     document.getElementById('chaosX').innerText = cx.toFixed(3);
+                function update() {
+                    Module.Engine_UpdateChaos(task);
+                    
+                    const ex = Module.Task_GetEntropy(task);
+                    const cx = Module.Task_GetStressX(task);
+                    const x = Module.Task_GetPositionX(task);
+
+                    document.getElementById('entropy').innerText = ex.toFixed(6);
+                    document.getElementById('prob').innerText = (ex * 72).toFixed(1) + "%"; 
+                    document.getElementById('chaosX').innerText = cx.toFixed(3);
 
                     // Fade effect for the attractor trails
                     ctx.fillStyle = "rgba(5, 9, 20, 0.1)"; 
