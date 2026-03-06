@@ -136,7 +136,14 @@ export function usePhysicsWorker() {
   }, []);
 
   const serialize = useCallback((taskId) => {
-    workerRef.current?.postMessage({ type: 'SERIALIZE', taskId });
+    return new Promise((resolve, reject) => {
+      if (!workerRef.current) {
+        reject(new Error('Physics worker is not ready'));
+        return;
+      }
+      serializeCallbacksRef.current.set(taskId, resolve);
+      workerRef.current.postMessage({ type: 'SERIALIZE', taskId });
+    });
   }, []);
 
   const deserialize = useCallback((taskId, state) => {

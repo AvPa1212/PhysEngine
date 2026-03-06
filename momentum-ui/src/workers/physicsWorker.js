@@ -26,6 +26,8 @@ let simInterval = null;
 
 const STEP_MS = 1000 / 60; // ≈ 16.67 ms target
 const ENTROPY_THRESHOLD = 1.5;
+// Number of active tasks that triggers a SystemOverheat event from the worker.
+const SYSTEM_OVERHEAT_TASK_COUNT = 8;
 
 // ── Message handler ─────────────────────────────────────────────────────────
 
@@ -64,8 +66,12 @@ self.onmessage = async (e) => {
       if (!Module) break;
       const ptr = Module.Task_Create();
       if (data.mass != null) Module.Task_SetMass(ptr, data.mass);
-      if (data.stressX != null)
-        Module.Task_SetStress(ptr, data.stressX, data.stressY, data.stressZ);
+      if (data.stressX != null || data.stressY != null || data.stressZ != null) {
+        const sx = data.stressX ?? 0;
+        const sy = data.stressY ?? 0;
+        const sz = data.stressZ ?? 0;
+        Module.Task_SetStress(ptr, sx, sy, sz);
+      }
       tasks.set(data.taskId, ptr);
       self.postMessage({ type: 'TASK_CREATED', taskId: data.taskId });
       break;
@@ -186,6 +192,16 @@ function startSimulation() {
       events,
       perf: { execTime, taskCount: tasks.size },
     });
+
+    // Emit SystemOverheat when the worker manages too many concurrent tasks.
+    if (tasks.size >= SYSTEM_OVERHEAT_TASK_COUNT) {
+      self.postMessage({
+        type: 'STATE_UPDATE',
+        tasks: {},
+        events: [{ type: 'SystemOverheat', taskCount: tasks.size }],
+        perf: { execTime: 0, taskCount: tasks.size },
+      });
+    }
   }, STEP_MS);
 }
 

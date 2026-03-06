@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <cmath>
 #include <cstring>
+#include <string>
 
 // Test result tracking
 struct TestResults {

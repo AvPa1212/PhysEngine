@@ -6,8 +6,6 @@ import './index.css';
 
 // System Heat threshold (°K) beyond which the UI enters "Burnout" mode.
 const BURNOUT_THRESHOLD = 100;
-// Number of active tasks that triggers a SystemOverheat event.
-const SYSTEM_OVERHEAT_TASK_COUNT = 8;
 
 function App() {
   const {
@@ -60,13 +58,6 @@ function App() {
       unsubOverheat();
     };
   }, [eventBridge]);
-
-  // ── System-overheat detection ────────────────────────────────────────────
-  useEffect(() => {
-    if (tasks.length >= SYSTEM_OVERHEAT_TASK_COUNT && eventBridge) {
-      eventBridge.emit('SystemOverheat', { taskCount: tasks.length });
-    }
-  }, [tasks.length, eventBridge]);
 
   // ── Auto-dismiss notifications ───────────────────────────────────────────
   useEffect(() => {

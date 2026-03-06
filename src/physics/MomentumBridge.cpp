@@ -83,39 +83,42 @@ namespace Bridge {
     }
 
     // --- Force Application ---
-    void ApplyForce(Task* task, double fx, double fy, double fz) {
+    // Velocity is 2D; z-force is ignored to keep Δv = F/m behavior consistent.
+    void ApplyForce(Task* task, double fx, double fy, double /*fz*/) {
         if (task && task->mass > 0.0) {
             task->velocity.x += fx / task->mass;
             task->velocity.y += fy / task->mass;
-            task->stressX += fz * 0.01;
         }
     }
 
     // --- JSON Serialization Helpers ---
-    static double parseJsonDouble(const std::string& json, const std::string& key) {
+    // Returns true and sets `out` if `key` is found; returns false otherwise.
+    static bool tryParseJsonDouble(const std::string& json, const std::string& key, double& out) {
         std::string search = "\"" + key + "\":";
         auto pos = json.find(search);
-        if (pos == std::string::npos) return 0.0;
+        if (pos == std::string::npos) return false;
         pos += search.length();
         // Skip whitespace
         while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\t')) pos++;
         try {
-            return std::stod(json.substr(pos));
+            out = std::stod(json.substr(pos));
+            return true;
         } catch (...) {
-            return 0.0;
+            return false;
         }
     }
 
-    static int parseJsonInt(const std::string& json, const std::string& key) {
+    static bool tryParseJsonInt(const std::string& json, const std::string& key, int& out) {
         std::string search = "\"" + key + "\":";
         auto pos = json.find(search);
-        if (pos == std::string::npos) return 0;
+        if (pos == std::string::npos) return false;
         pos += search.length();
         while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\t')) pos++;
         try {
-            return std::stoi(json.substr(pos));
+            out = std::stoi(json.substr(pos));
+            return true;
         } catch (...) {
-            return 0;
+            return false;
         }
     }
 
@@ -138,18 +141,23 @@ namespace Bridge {
         return oss.str();
     }
 
+    // Only updates fields whose keys are present in the JSON, leaving the
+    // rest of the task untouched.  This prevents partial JSON (or `{}`)
+    // from silently zeroing existing state.
     void Deserialize(Task* task, const std::string& json) {
         if (!task || json.empty()) return;
-        task->position.x = parseJsonDouble(json, "posX");
-        task->position.y = parseJsonDouble(json, "posY");
-        task->velocity.x = parseJsonDouble(json, "velX");
-        task->velocity.y = parseJsonDouble(json, "velY");
-        task->mass = parseJsonDouble(json, "mass");
-        task->stressX = parseJsonDouble(json, "stressX");
-        task->stressY = parseJsonDouble(json, "stressY");
-        task->stressZ = parseJsonDouble(json, "stressZ");
-        task->entropy = parseJsonDouble(json, "entropy");
-        task->stepCount = parseJsonInt(json, "stepCount");
+        double dval;
+        int ival;
+        if (tryParseJsonDouble(json, "posX", dval))    task->position.x = dval;
+        if (tryParseJsonDouble(json, "posY", dval))    task->position.y = dval;
+        if (tryParseJsonDouble(json, "velX", dval))    task->velocity.x = dval;
+        if (tryParseJsonDouble(json, "velY", dval))    task->velocity.y = dval;
+        if (tryParseJsonDouble(json, "mass", dval))    task->mass = dval;
+        if (tryParseJsonDouble(json, "stressX", dval)) task->stressX = dval;
+        if (tryParseJsonDouble(json, "stressY", dval)) task->stressY = dval;
+        if (tryParseJsonDouble(json, "stressZ", dval)) task->stressZ = dval;
+        if (tryParseJsonDouble(json, "entropy", dval)) task->entropy = dval;
+        if (tryParseJsonInt(json, "stepCount", ival))   task->stepCount = ival;
     }
 }
 
@@ -240,8 +248,8 @@ extern "C" {
         Bridge::Collapse(t);    
     }
 
-    // Static buffer to keep returned JSON alive until the next call
-    static std::string g_serializeBuffer;
+    // Thread-local buffer to keep returned JSON alive until the next call on this thread
+    static thread_local std::string g_serializeBuffer;
 
     MOMENTUM_API const char* State_Serialize(Task* t) {
         g_serializeBuffer = Bridge::Serialize(t);

@@ -1,9 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as THREE from 'three';
 
-// Entropy threshold that triggers an automatic Quantum Collapse.
-const ENTROPY_COLLAPSE_THRESHOLD = 1.5;
-
 /**
  * QuantumTask – Renders a single physics task as a Three.js sphere and drives
  * its state from a physics Web Worker.
@@ -147,9 +144,20 @@ const QuantumTask = ({
     [isDragging, taskId, onApplyForce]
   );
 
-  const handlePointerUp = useCallback(() => {
+  const handlePointerUp = useCallback((e) => {
     setIsDragging(false);
     dragStartRef.current = null;
+    if (e?.currentTarget?.releasePointerCapture && e?.pointerId != null) {
+      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+    }
+  }, []);
+
+  const handlePointerCancel = useCallback((e) => {
+    setIsDragging(false);
+    dragStartRef.current = null;
+    if (e?.currentTarget?.releasePointerCapture && e?.pointerId != null) {
+      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+    }
   }, []);
 
   // ── Derived display values ─────────────────────────────────────────────
@@ -168,6 +176,7 @@ const QuantumTask = ({
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
         style={{ touchAction: 'none' }}
       ></div>
       <div className="task-info">
