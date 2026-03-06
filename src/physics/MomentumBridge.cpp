@@ -17,14 +17,30 @@ namespace Bridge {
         return new Task();
     }
 
+    void Destroy(Task* task) {
+        delete task;
+    }
+
     // Getters
     double GetPositionX(Task* task) { return (task != nullptr) ? task->position.x : 0.0; }
+    double GetPositionY(Task* task) { return (task != nullptr) ? task->position.y : 0.0; }
     double GetEntropy(Task* task)   { return (task != nullptr) ? task->entropy : 0.0; }
     double GetStressX(Task* task)   { return (task != nullptr) ? task->stressX : 0.0; }
     double GetStressY(Task* task)   { return (task != nullptr) ? task->stressY : 0.0; }
     double GetStressZ(Task* task)   { return (task != nullptr) ? task->stressZ : 0.0; }
+    double GetCollapseProbability(Task* task) {
+        return (task != nullptr) ? QuantumEngine::calculateCollapseProbability(*task) : 0.0;
+    }
 
     // Setters (For UI Manual Overrides)
+    void SetPosition(Task* task, double x, double y) {
+        if (task) { task->position.x = x; task->position.y = y; }
+    }
+
+    void SetVelocity(Task* task, double vx, double vy) {
+        if (task) { task->velocity.x = vx; task->velocity.y = vy; }
+    }
+
     void SetMass(Task* task, double mass) {
         if (task) task->mass = mass;
     }
@@ -38,6 +54,12 @@ namespace Bridge {
     }
 
     // Engine Commands
+    void IntegrateClassical(Task* task) {
+        if (task) {
+            ClassicalEngine::integrateRK4(*task);
+        }
+    }
+
     void UpdateChaos(Task* task) {
         if (task) {
             ChaosEngine::update(*task);
@@ -59,11 +81,35 @@ extern "C" {
     MOMENTUM_API Task* Task_Create() { 
         return Bridge::Create(); 
     }
+
+    MOMENTUM_API void Task_Destroy(Task* t) {
+        Bridge::Destroy(t);
+    }
     
+    MOMENTUM_API void Task_SetPosition(Task* t, double x, double y) {
+        Bridge::SetPosition(t, x, y);
+    }
+
+    MOMENTUM_API void Task_SetVelocity(Task* t, double vx, double vy) {
+        Bridge::SetVelocity(t, vx, vy);
+    }
+
+    MOMENTUM_API void Task_SetMass(Task* t, double mass) {
+        Bridge::SetMass(t, mass);
+    }
+
+    MOMENTUM_API void Task_SetStress(Task* t, double sx, double sy, double sz) {
+        Bridge::SetStress(t, sx, sy, sz);
+    }
+
     MOMENTUM_API double Task_GetPositionX(Task* t) { 
         return Bridge::GetPositionX(t); 
     }
-    
+
+    MOMENTUM_API double Task_GetPositionY(Task* t) {
+        return Bridge::GetPositionY(t);
+    }
+
     MOMENTUM_API double Task_GetEntropy(Task* t) { 
         return Bridge::GetEntropy(t); 
     }
@@ -71,7 +117,23 @@ extern "C" {
     MOMENTUM_API double Task_GetStressX(Task* t) { 
         return Bridge::GetStressX(t); 
     }
-    
+
+    MOMENTUM_API double Task_GetStressY(Task* t) {
+        return Bridge::GetStressY(t);
+    }
+
+    MOMENTUM_API double Task_GetStressZ(Task* t) {
+        return Bridge::GetStressZ(t);
+    }
+
+    MOMENTUM_API double Task_GetCollapseProbability(Task* t) {
+        return Bridge::GetCollapseProbability(t);
+    }
+
+    MOMENTUM_API void Engine_IntegrateClassical(Task* t) {
+        Bridge::IntegrateClassical(t);
+    }
+
     MOMENTUM_API void Engine_UpdateChaos(Task* t) { 
         Bridge::UpdateChaos(t); 
     }
@@ -89,17 +151,23 @@ EMSCRIPTEN_BINDINGS(momentum_module) {
 
     // 2. Bind Getters
     function("Task_Create", &Bridge::Create, allow_raw_pointers());
+    function("Task_Destroy", &Bridge::Destroy, allow_raw_pointers());
     function("Task_GetPositionX", &Bridge::GetPositionX, allow_raw_pointers());
+    function("Task_GetPositionY", &Bridge::GetPositionY, allow_raw_pointers());
     function("Task_GetEntropy", &Bridge::GetEntropy, allow_raw_pointers());
     function("Task_GetStressX", &Bridge::GetStressX, allow_raw_pointers());
     function("Task_GetStressY", &Bridge::GetStressY, allow_raw_pointers());
     function("Task_GetStressZ", &Bridge::GetStressZ, allow_raw_pointers());
+    function("Task_GetCollapseProbability", &Bridge::GetCollapseProbability, allow_raw_pointers());
     
     // 3. Bind Setters
+    function("Task_SetPosition", &Bridge::SetPosition, allow_raw_pointers());
+    function("Task_SetVelocity", &Bridge::SetVelocity, allow_raw_pointers());
     function("Task_SetMass", &Bridge::SetMass, allow_raw_pointers());
     function("Task_SetStress", &Bridge::SetStress, allow_raw_pointers());
 
     // 4. Bind Engine Actions
+    function("Engine_IntegrateClassical", &Bridge::IntegrateClassical, allow_raw_pointers());
     function("Engine_UpdateChaos", &Bridge::UpdateChaos, allow_raw_pointers());
     function("Engine_PerformQuantumCollapse", &Bridge::Collapse, allow_raw_pointers());
 }

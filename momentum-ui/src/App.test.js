@@ -1,8 +1,10 @@
 import { render, screen } from '@testing-library/react';
 import App from './App';
 
-test('renders learn react link', () => {
+test('shows the quantum core loading screen while the WASM engine initialises', () => {
   render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+  // The engine script is injected asynchronously; before it resolves the app
+  // renders the loading indicator.
+  const loader = screen.getByText(/loading quantum core/i);
+  expect(loader).toBeInTheDocument();
 });
