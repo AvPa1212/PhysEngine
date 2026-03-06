@@ -34,7 +34,7 @@ function App() {
         setNotifications((prev) => [
           ...prev.slice(-4),
           {
-            id: Date.now(),
+            id: `entropy_${evt.taskId}_${Date.now()}`,
             message: `\u26A1 Entropy threshold reached (${Number(
               evt.entropy
             ).toFixed(2)})`,
@@ -48,7 +48,7 @@ function App() {
       setNotifications((prev) => [
         ...prev.slice(-4),
         {
-          id: Date.now(),
+          id: `overheat_${Date.now()}`,
           message: '\uD83D\uDD25 System Overheat! Too many active tasks.',
           type: 'critical',
         },

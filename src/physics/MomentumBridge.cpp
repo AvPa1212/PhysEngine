@@ -84,7 +84,7 @@ namespace Bridge {
 
     // --- Force Application ---
     void ApplyForce(Task* task, double fx, double fy, double fz) {
-        if (task) {
+        if (task && task->mass > 0.0) {
             task->velocity.x += fx / task->mass;
             task->velocity.y += fy / task->mass;
             task->stressX += fz * 0.01;

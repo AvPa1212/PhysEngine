@@ -117,6 +117,9 @@ const QuantumTask = ({
   }, [taskState]);
 
   // ── 4. Interactive Dynamics – pointer drag → normalised force ─────────
+  // Scale factor converting normalised drag deltas to physics force magnitude.
+  const FORCE_SCALE = 10;
+
   const handlePointerDown = useCallback((e) => {
     setIsDragging(true);
     const rect = e.currentTarget.getBoundingClientRect();
@@ -134,9 +137,8 @@ const QuantumTask = ({
       const curX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       const curY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
 
-      // Normalised delta → force vector (scale factor for feel)
-      const fx = (curX - dragStartRef.current.x) * 10;
-      const fy = (curY - dragStartRef.current.y) * 10;
+      const fx = (curX - dragStartRef.current.x) * FORCE_SCALE;
+      const fy = (curY - dragStartRef.current.y) * FORCE_SCALE;
       const fz = 0;
 
       onApplyForce(taskId, fx, fy, fz);

@@ -48,7 +48,7 @@ self.onmessage = async (e) => {
       } catch (err) {
         self.postMessage({
           type: 'ERROR',
-          message: err?.message || 'Worker WASM init failed',
+          message: `Worker WASM init failed: ${data.wasmPath} – ${err?.message || 'unknown error'}`,
         });
       }
       break;
