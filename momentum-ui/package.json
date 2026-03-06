@@ -25,6 +25,11 @@
       "react-app/jest"
     ]
   },
+  "jest": {
+    "moduleNameMapper": {
+      "^.*/hooks/usePhysicsWorker$": "<rootDir>/src/hooks/__mocks__/usePhysicsWorker.js"
+    }
+  },
   "browserslist": {
     "production": [
       ">0.2%",

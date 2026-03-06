@@ -1,25 +1,58 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as THREE from 'three';
 
 // Entropy threshold that triggers an automatic Quantum Collapse.
 const ENTROPY_COLLAPSE_THRESHOLD = 1.5;
 
-const QuantumTask = ({ engine, title, difficulty, onRemove }) => {
+/**
+ * QuantumTask – Renders a single physics task as a Three.js sphere and drives
+ * its state from a physics Web Worker.
+ *
+ * Props:
+ *   taskId      – Unique identifier for this task (string)
+ *   title       – Display title
+ *   difficulty  – Mass / difficulty value
+ *   taskState   – { stressX, stressY, stressZ, entropy, ... } from the worker
+ *   onRemove    – Callback to remove this task
+ *   onApplyForce– (taskId, fx, fy, fz) send force to worker
+ *   onCollapse  – (taskId) request quantum collapse in worker
+ *   onCreateTask– (taskId, opts) create C++ Task in worker
+ *   onDestroyTask–(taskId) destroy C++ Task in worker (1:1 lifecycle)
+ */
+const QuantumTask = ({
+  taskId,
+  title,
+  difficulty,
+  taskState,
+  onRemove,
+  onApplyForce,
+  onCollapse,
+  onCreateTask,
+  onDestroyTask,
+}) => {
   const mountRef = useRef(null);
-  const taskPtr = useRef(null);
-  const [stats, setStats] = useState({ entropy: 0, chaos: 0 });
+  const threeRef = useRef(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef(null);
 
+  // ── 1. Lifecycle: create / destroy C++ Task in the worker ──────────────
   useEffect(() => {
-    // 1. Create the C++ Task instance.
-    taskPtr.current = engine.Task_Create();
-    engine.Task_SetMass(taskPtr.current, difficulty);
+    onCreateTask(taskId, { mass: difficulty });
+    return () => {
+      onDestroyTask(taskId);
+    };
+    // taskId and difficulty are stable for the lifetime of this component.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId, difficulty]);
 
-    // 2. Determine canvas dimensions from the parent container.
+  // ── 2. Three.js scene (runs entirely on the main thread) ──────────────
+  useEffect(() => {
     const container = mountRef.current;
+    if (!container) return;
+
     const width = container.clientWidth || 300;
     const height = 200;
 
-    // 3. Setup Three.js scene for this specific task.
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 100);
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
@@ -28,7 +61,10 @@ const QuantumTask = ({ engine, title, difficulty, onRemove }) => {
     container.appendChild(renderer.domElement);
 
     const geo = new THREE.SphereGeometry(1, 32, 32);
-    const mat = new THREE.MeshPhongMaterial({ color: 0xff7700, emissive: 0xff3300 });
+    const mat = new THREE.MeshPhongMaterial({
+      color: 0xff7700,
+      emissive: 0xff3300,
+    });
     const sphere = new THREE.Mesh(geo, mat);
     scene.add(sphere);
 
@@ -36,9 +72,6 @@ const QuantumTask = ({ engine, title, difficulty, onRemove }) => {
     scene.add(light);
     camera.position.z = 5;
 
-    // 4. Resize handler – keeps the canvas in sync with its container.
-    // ResizeObserver fires only when this container's size changes, so with N tasks
-    // a window resize triggers exactly N targeted callbacks instead of N window listeners.
     const resizeObserver = new ResizeObserver((entries) => {
       const w = entries[0].contentRect.width || 300;
       renderer.setSize(w, height);
@@ -47,70 +80,106 @@ const QuantumTask = ({ engine, title, difficulty, onRemove }) => {
     });
     resizeObserver.observe(container);
 
-    // 5. Animation loop.
+    // Store refs for the render loop and state-update effect.
+    threeRef.current = { sphere, scene, camera, renderer };
+
+    // Pure render loop – no physics calls, just redraw.
     let frameId;
     const animate = () => {
       frameId = requestAnimationFrame(animate);
-
-      engine.Engine_UpdateChaos(taskPtr.current);
-
-      const x = engine.Task_GetStressX(taskPtr.current);
-      const y = engine.Task_GetStressY(taskPtr.current);
-      const z = engine.Task_GetStressZ(taskPtr.current);
-      const entropy = engine.Task_GetEntropy(taskPtr.current);
-
-      // Map physics values to visuals.
-      sphere.position.set(x * 0.1, y * 0.1, (z - 25) * 0.1);
-      // Higher entropy → larger, more unstable sphere.
-      sphere.scale.setScalar(1 + entropy * 2);
-
-      setStats({
-        entropy: entropy.toFixed(4),
-        chaos: Math.abs(x + y + z).toFixed(2)
-      });
-
-      // Auto-Collapse: reset urgency when entropy exceeds the safe limit.
-      if (entropy > ENTROPY_COLLAPSE_THRESHOLD) {
-        engine.Engine_PerformQuantumCollapse(taskPtr.current);
-      }
-
       renderer.render(scene, camera);
     };
-
     animate();
 
-    // 6. Cleanup on unmount: cancel RAF, dispose Three.js resources, free C++ memory.
     return () => {
       cancelAnimationFrame(frameId);
       resizeObserver.disconnect();
-
-      // Dispose Three.js GPU resources.
       geo.dispose();
       mat.dispose();
       renderer.dispose();
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
-
-      // Free the WASM-side Task allocation.
-      if (taskPtr.current !== null) {
-        engine.Task_Destroy(taskPtr.current);
-        taskPtr.current = null;
-      }
+      threeRef.current = null;
     };
-  }, [engine, difficulty]);
+  }, []);
+
+  // ── 3. Map worker state → Three.js visuals ────────────────────────────
+  useEffect(() => {
+    if (!taskState || !threeRef.current) return;
+    const { sphere } = threeRef.current;
+    sphere.position.set(
+      taskState.stressX * 0.1,
+      taskState.stressY * 0.1,
+      (taskState.stressZ - 25) * 0.1
+    );
+    sphere.scale.setScalar(1 + taskState.entropy * 2);
+  }, [taskState]);
+
+  // ── 4. Interactive Dynamics – pointer drag → normalised force ─────────
+  const handlePointerDown = useCallback((e) => {
+    setIsDragging(true);
+    const rect = e.currentTarget.getBoundingClientRect();
+    dragStartRef.current = {
+      x: ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      y: -(((e.clientY - rect.top) / rect.height) * 2 - 1),
+    };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }, []);
+
+  const handlePointerMove = useCallback(
+    (e) => {
+      if (!isDragging || !dragStartRef.current) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const curX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const curY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+
+      // Normalised delta → force vector (scale factor for feel)
+      const fx = (curX - dragStartRef.current.x) * 10;
+      const fy = (curY - dragStartRef.current.y) * 10;
+      const fz = 0;
+
+      onApplyForce(taskId, fx, fy, fz);
+      dragStartRef.current = { x: curX, y: curY };
+    },
+    [isDragging, taskId, onApplyForce]
+  );
+
+  const handlePointerUp = useCallback(() => {
+    setIsDragging(false);
+    dragStartRef.current = null;
+  }, []);
+
+  // ── Derived display values ─────────────────────────────────────────────
+  const entropy = taskState?.entropy?.toFixed(4) ?? '0.0000';
+  const chaos = taskState
+    ? Math.abs(
+        taskState.stressX + taskState.stressY + taskState.stressZ
+      ).toFixed(2)
+    : '0.00';
 
   return (
     <div className="task-card">
-      <div className="task-viz" ref={mountRef}></div>
+      <div
+        className="task-viz"
+        ref={mountRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        style={{ touchAction: 'none' }}
+      ></div>
       <div className="task-info">
         <h3>{title}</h3>
-        <p>Entropy: <span className="neon-text">{stats.entropy}</span></p>
-        <p>Chaos Level: <span className="orange-text">{stats.chaos}</span></p>
-        <button onClick={() => engine.Engine_PerformQuantumCollapse(taskPtr.current)}>
-          Force Collapse
+        <p>
+          Entropy: <span className="neon-text">{entropy}</span>
+        </p>
+        <p>
+          Chaos Level: <span className="orange-text">{chaos}</span>
+        </p>
+        <button onClick={() => onCollapse(taskId)}>Force Collapse</button>
+        <button className="done-btn" onClick={onRemove}>
+          Complete Task
         </button>
-        <button className="done-btn" onClick={onRemove}>Complete Task</button>
       </div>
     </div>
   );
