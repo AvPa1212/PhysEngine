@@ -37,13 +37,15 @@ const QuantumTask = ({ engine, title, difficulty, onRemove }) => {
     camera.position.z = 5;
 
     // 4. Resize handler – keeps the canvas in sync with its container.
-    const handleResize = () => {
-      const w = container.clientWidth || 300;
+    // ResizeObserver fires only when this container's size changes, so with N tasks
+    // a window resize triggers exactly N targeted callbacks instead of N window listeners.
+    const resizeObserver = new ResizeObserver((entries) => {
+      const w = entries[0].contentRect.width || 300;
       renderer.setSize(w, height);
       camera.aspect = w / height;
       camera.updateProjectionMatrix();
-    };
-    window.addEventListener('resize', handleResize);
+    });
+    resizeObserver.observe(container);
 
     // 5. Animation loop.
     let frameId;
@@ -80,7 +82,7 @@ const QuantumTask = ({ engine, title, difficulty, onRemove }) => {
     // 6. Cleanup on unmount: cancel RAF, dispose Three.js resources, free C++ memory.
     return () => {
       cancelAnimationFrame(frameId);
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
 
       // Dispose Three.js GPU resources.
       geo.dispose();
