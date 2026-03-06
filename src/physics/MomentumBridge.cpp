@@ -17,6 +17,10 @@ namespace Bridge {
         return new Task();
     }
 
+    void Destroy(Task* task) {
+        delete task;
+    }
+
     // Getters
     double GetPositionX(Task* task) { return (task != nullptr) ? task->position.x : 0.0; }
     double GetEntropy(Task* task)   { return (task != nullptr) ? task->entropy : 0.0; }
@@ -59,6 +63,10 @@ extern "C" {
     MOMENTUM_API Task* Task_Create() { 
         return Bridge::Create(); 
     }
+
+    MOMENTUM_API void Task_Destroy(Task* t) {
+        Bridge::Destroy(t);
+    }
     
     MOMENTUM_API double Task_GetPositionX(Task* t) { 
         return Bridge::GetPositionX(t); 
@@ -89,6 +97,7 @@ EMSCRIPTEN_BINDINGS(momentum_module) {
 
     // 2. Bind Getters
     function("Task_Create", &Bridge::Create, allow_raw_pointers());
+    function("Task_Destroy", &Bridge::Destroy, allow_raw_pointers());
     function("Task_GetPositionX", &Bridge::GetPositionX, allow_raw_pointers());
     function("Task_GetEntropy", &Bridge::GetEntropy, allow_raw_pointers());
     function("Task_GetStressX", &Bridge::GetStressX, allow_raw_pointers());

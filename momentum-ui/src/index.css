@@ -76,8 +76,64 @@ h1 small {
 /* Input Area */
 .input-area {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 40px;
+  align-items: center;
+}
+
+.input-area > input[type="text"] {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+/* Difficulty slider group */
+.slider-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.slider-group label {
+  font-size: 0.75em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.difficulty-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: rgba(0, 229, 255, 0.2);
+  border-radius: 2px;
+  outline: none;
+  padding: 0;
+  border: none;
+}
+
+.difficulty-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--neon-cyan);
+  cursor: pointer;
+  box-shadow: 0 0 6px var(--neon-cyan);
+}
+
+.difficulty-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--neon-cyan);
+  cursor: pointer;
+  box-shadow: 0 0 6px var(--neon-cyan);
+  border: none;
 }
 
 input {
@@ -175,6 +231,14 @@ button:hover {
   color: var(--neon-cyan);
   letter-spacing: 5px;
   animation: pulse 1.5s infinite;
+  text-align: center;
+  padding: 20px;
+}
+
+.error-state {
+  color: var(--neon-pink);
+  animation: none;
+  font-size: 1.2em;
 }
 
 @keyframes pulse {
@@ -193,4 +257,59 @@ button:hover {
   50% { transform: translate(-3px, 0px) rotate(0.1deg); }
   75% { transform: translate(3px, 2px) rotate(0deg); }
   100% { transform: translate(1px, -1px) rotate(-0.1deg); }
+}
+
+/* ── Responsive layout ─────────────────────────────────────────────────── */
+
+/* Tablet */
+@media (max-width: 768px) {
+  .app-container {
+    padding: 20px;
+  }
+
+  header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .thermo-meter {
+    width: 100%;
+    text-align: left;
+  }
+
+  .task-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .app-container {
+    padding: 12px;
+  }
+
+  h1 {
+    font-size: 1.4em;
+    letter-spacing: 2px;
+  }
+
+  .input-area {
+    flex-direction: column;
+  }
+
+  .input-area > input[type="text"],
+  .input-area > button,
+  .slider-group {
+    width: 100%;
+  }
+
+  .task-card {
+    padding: 14px;
+  }
+
+  .loader {
+    font-size: 1.2em;
+    letter-spacing: 2px;
+  }
 }
