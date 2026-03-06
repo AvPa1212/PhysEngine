@@ -25,10 +25,17 @@ extern "C" {
     // --- Task State Retrieval ---
     MOMENTUM_API double Task_GetPositionX(Task* taskPtr);
     MOMENTUM_API double Task_GetPositionY(Task* taskPtr);
+    MOMENTUM_API double Task_GetVelocityX(Task* taskPtr);
+    MOMENTUM_API double Task_GetVelocityY(Task* taskPtr);
+    MOMENTUM_API double Task_GetMass(Task* taskPtr);
     MOMENTUM_API double Task_GetStressX(Task* taskPtr);
     MOMENTUM_API double Task_GetStressY(Task* taskPtr);
     MOMENTUM_API double Task_GetStressZ(Task* taskPtr);
     MOMENTUM_API double Task_GetEntropy(Task* taskPtr);
+    MOMENTUM_API int Task_GetStepCount(Task* taskPtr);
+
+    // --- Force Application ---
+    MOMENTUM_API void Task_ApplyForce(Task* taskPtr, double fx, double fy, double fz);
 
     // --- Engine Operations ---
     MOMENTUM_API void Engine_IntegrateClassical(Task* taskPtr);
@@ -37,4 +44,8 @@ extern "C" {
     // --- Quantum Operations ---
     MOMENTUM_API double Task_GetCollapseProbability(Task* taskPtr);
     MOMENTUM_API void Engine_PerformQuantumCollapse(Task* taskPtr);
+
+    // --- State Serialization ---
+    MOMENTUM_API const char* State_Serialize(Task* taskPtr);
+    MOMENTUM_API void State_Deserialize(Task* taskPtr, const char* json);
 }

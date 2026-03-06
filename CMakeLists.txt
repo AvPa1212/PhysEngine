@@ -52,9 +52,11 @@ else()
     add_executable(PhysEngine main.cpp)
     add_executable(PhysicsTests tests/PhysicsTests.cpp)
     add_executable(QuantumTests tests/QuantumTests.cpp)
+    add_executable(SerializationTests tests/SerializationTests.cpp)
 
     target_link_libraries(PhysEngine PRIVATE MomentumCore)
     target_link_libraries(PhysicsTests PRIVATE MomentumCore)
     target_link_libraries(QuantumTests PRIVATE MomentumCore)
+    target_link_libraries(SerializationTests PRIVATE MomentumCore)
 
 endif()
