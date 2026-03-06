@@ -1,56 +1,67 @@
 import React, { useState } from 'react';
 import { useMomentum } from './hooks/useMomentum';
 import QuantumTask from './components/QuantumTask';
+import TaskInput from './components/TaskInput';
 import './index.css';
 
-function App() {
-  const { engine, isReady } = useMomentum();
-  const [tasks, setTasks] = useState([]);
-  const [input, setInput] = useState("");
-  const isBurningOut = tasks.length > 5;
+// System Heat threshold (°K) beyond which the UI enters "Burnout" mode.
+const BURNOUT_THRESHOLD = 100;
 
-  const addTask = () => {
-    if (!input) return;
-    setTasks([...tasks, { id: Date.now(), title: input, difficulty: Math.random() * 5 + 1 }]);
-    setInput("");
+function App() {
+  const { engine, isReady, error } = useMomentum();
+  const [tasks, setTasks] = useState([]);
+
+  if (error) {
+    return (
+      <div className="loader error-state">
+        ⚠ ENGINE FAULT: {error}
+      </div>
+    );
+  }
+
+  if (!isReady) {
+    return <div className="loader">LOADING QUANTUM CORE...</div>;
+  }
+
+  // Thermodynamic Calculation: each active task contributes 12.5 °K of system heat.
+  const systemHeat = tasks.length * 12.5;
+  const heatDisplay = systemHeat.toFixed(1);
+  // Cap the fill bar at 100 % for visual clarity.
+  const heatPct = Math.min((systemHeat / BURNOUT_THRESHOLD) * 100, 100);
+  const isBurningOut = systemHeat > BURNOUT_THRESHOLD;
+
+  const addTask = ({ title, difficulty }) => {
+    setTasks((prev) => [...prev, { id: Date.now(), title, difficulty }]);
   };
 
-  if (!isReady) return <div className="loader">LOADING QUANTUM CORE...</div>;
-
-  // Thermodynamic Calculation: Total Entropy of the ToDo List
-  const systemHeat = (tasks.length * 12.5).toFixed(1);
+  const removeTask = (id) => {
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+  };
 
   return (
-    <div className={`app-container ${isBurningOut ? 'burnout-shake' : ''}`}>
-      <div className="app-container">
-        <header>
-          <h1>MOMENTUM <small>WORKSPACE</small></h1>
-          <div className="thermo-meter">
-            <span>SYSTEM HEAT: {systemHeat}°K</span>
-            <div className="bar"><div className="fill" style={{width: `${systemHeat}%`}}></div></div>
+    <div className={`app-container${isBurningOut ? ' burnout-shake' : ''}`}>
+      <header>
+        <h1>MOMENTUM <small>WORKSPACE</small></h1>
+        <div className="thermo-meter">
+          <span>SYSTEM HEAT: {heatDisplay}°K</span>
+          <div className="bar">
+            <div className="fill" style={{ width: `${heatPct}%` }}></div>
           </div>
-        </header>
+        </div>
+      </header>
 
-        <div className="input-area">
-          <input 
-            value={input} 
-            onChange={(e) => setInput(e.target.value)} 
-            placeholder="Inject new objective..."
+      <TaskInput onAdd={addTask} />
+
+      <div className="task-grid">
+        {tasks.map((t) => (
+          <QuantumTask
+            key={t.id}
+            engine={engine}
+            title={t.title}
+            difficulty={t.difficulty}
+            onRemove={() => removeTask(t.id)}
           />
-          <button onClick={addTask}>Initialize Task</button>
-        </div>
-
-        <div className="task-grid">
-          {tasks.map(t => (
-            <QuantumTask 
-              key={t.id} 
-              engine={engine} 
-              title={t.title} 
-              difficulty={t.difficulty}
-              onRemove={() => setTasks(tasks.filter(item => item.id !== t.id))}
-            />
-          ))}
-        </div>
+        ))}
       </div>
     </div>
   );
