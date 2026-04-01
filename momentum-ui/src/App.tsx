@@ -5,6 +5,7 @@ import {
   NavLink,
   Route,
   Routes,
+  useNavigate,
 } from 'react-router-dom';
 import { usePhysicsWorker } from './hooks/usePhysicsWorker';
 import './index.css';
@@ -60,6 +61,7 @@ function App() {
 }
 
 function Workspace() {
+  const navigate = useNavigate();
   const {
     isReady,
     error,
@@ -79,6 +81,7 @@ function Workspace() {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDifficulty, setNewTaskDifficulty] = useState(5);
   const [newTaskGroupId, setNewTaskGroupId] = useState(DEFAULT_GROUP_ID);
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupColor, setNewGroupColor] = useState('#4f8ef7');
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
@@ -273,10 +276,10 @@ function Workspace() {
   const heatPct = Math.min((systemHeat / BURNOUT_THRESHOLD) * 100, 100);
   const isBurningOut = systemHeat > BURNOUT_THRESHOLD;
 
-  const addTask = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const createTaskFromInput = () => {
     const title = newTaskTitle.trim();
-    if (!title) return;
+    if (!title) return false;
+
     const id = `${Date.now()}`;
     const groupId = groupMap[newTaskGroupId] ? newTaskGroupId : DEFAULT_GROUP_ID;
 
@@ -295,6 +298,19 @@ function Workspace() {
     setNewTaskDifficulty(5);
     setNewTaskGroupId(groupId);
     setSelectedTaskId(id);
+    return true;
+  };
+
+  const addTask = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    createTaskFromInput();
+  };
+
+  const quickAddTask = () => {
+    const created = createTaskFromInput();
+    if (!created) return;
+    setIsQuickAddOpen(false);
+    navigate('/simulation');
   };
 
   const patchTask = (id: string, patch: Partial<Omit<Task, 'id' | 'createdAt'>>) => {
@@ -436,6 +452,54 @@ function Workspace() {
                 <aside className="sidebar-left">
                   <div className="sidebar-section">
                     <div className="sidebar-label">Active Tasks</div>
+                    <button
+                      type="button"
+                      className="add-btn"
+                      onClick={() => setIsQuickAddOpen((prev) => !prev)}
+                    >
+                      + Add Task
+                    </button>
+                    {isQuickAddOpen && (
+                      <div className="quick-add-panel">
+                        <input
+                          className="mini-input"
+                          type="text"
+                          value={newTaskTitle}
+                          onChange={(e) => setNewTaskTitle(e.target.value)}
+                          placeholder="Task title"
+                          aria-label="Task title"
+                        />
+                        <div className="inline-row">
+                          <label htmlFor="quick-task-group">Group</label>
+                          <select
+                            id="quick-task-group"
+                            className="mini-input"
+                            value={newTaskGroupId}
+                            onChange={(e) => setNewTaskGroupId(e.target.value)}
+                          >
+                            {groups.map((group) => (
+                              <option key={group.id} value={group.id}>
+                                {group.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <label className="slider-label" htmlFor="quick-task-difficulty">
+                          Difficulty: {newTaskDifficulty}
+                        </label>
+                        <input
+                          id="quick-task-difficulty"
+                          type="range"
+                          min={1}
+                          max={10}
+                          value={newTaskDifficulty}
+                          onChange={(e) => setNewTaskDifficulty(Number(e.target.value))}
+                        />
+                        <button type="button" className="btn-primary" onClick={quickAddTask}>
+                          Create Task
+                        </button>
+                      </div>
+                    )}
                     {tasks.map((task) => {
                       const state = taskStates[task.id];
                       const energy = (state?.entropy ?? task.difficulty) * 12;
