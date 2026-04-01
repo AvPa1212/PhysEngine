@@ -5,7 +5,16 @@
   "outputDirectory": "momentum-ui/dist",
   "routes": [
     {
-      "handle": "filesystem"
+      "src": "/web_dist/(.*)",
+      "dest": "/web_dist/$1"
+    },
+    {
+      "src": "/assets/(.*)",
+      "dest": "/assets/$1"
+    },
+    {
+      "src": "/(.*\\..*)",
+      "dest": "/$1"
     },
     {
       "src": "/(.*)",
