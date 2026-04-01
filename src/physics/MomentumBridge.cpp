@@ -2,7 +2,7 @@
  * @file MomentumBridge.cpp
  * @brief Implementation of the public C/WASM bridge for the physics engine.
  *
- * Provides two parallel binding layers:
+ * Provides three binding layers:
  *
  *  1. **Bridge namespace** — C++ helper functions that implement the actual
  *     logic, perform null-pointer safety checks, and forward to the engine
