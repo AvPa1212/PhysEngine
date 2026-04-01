@@ -79,6 +79,30 @@ else()
 
     enable_testing()
 
+    add_executable(ComplexTests tests/ComplexTests.cpp)
+    target_include_directories(ComplexTests PRIVATE ${INC_DIR})
+    target_link_libraries(ComplexTests PRIVATE GTest::gtest_main m)
+
+    add_executable(MatrixTests tests/MatrixTests.cpp)
+    target_include_directories(MatrixTests PRIVATE ${INC_DIR})
+    target_link_libraries(MatrixTests PRIVATE GTest::gtest_main m)
+
+    add_executable(ThermodynamicsEngineTests tests/ThermodynamicsEngineTests.cpp)
+    target_include_directories(ThermodynamicsEngineTests PRIVATE ${INC_DIR})
+    target_link_libraries(ThermodynamicsEngineTests PRIVATE GTest::gtest_main m)
+
+    add_executable(QuantumEngineTests tests/QuantumEngineTests.cpp)
+    target_include_directories(QuantumEngineTests PRIVATE ${INC_DIR})
+    target_link_libraries(QuantumEngineTests PRIVATE GTest::gtest_main m)
+
+    add_executable(ChaosEngineTests tests/ChaosEngineTests.cpp)
+    target_include_directories(ChaosEngineTests PRIVATE ${INC_DIR})
+    target_link_libraries(ChaosEngineTests PRIVATE GTest::gtest_main m)
+
+    add_executable(EulerIntegratorTests tests/EulerIntegratorTests.cpp)
+    target_include_directories(EulerIntegratorTests PRIVATE ${INC_DIR})
+    target_link_libraries(EulerIntegratorTests PRIVATE GTest::gtest_main m)
+
     add_executable(Vector2Tests tests/Vector2Tests.cpp)
     target_include_directories(Vector2Tests PRIVATE ${INC_DIR})
     target_link_libraries(Vector2Tests PRIVATE GTest::gtest_main m)
@@ -166,6 +190,12 @@ else()
     target_link_libraries(EulerVsRK4BenchmarkTest PRIVATE MomentumCore GTest::gtest_main)
 
     include(GoogleTest)
+    gtest_discover_tests(ComplexTests)
+    gtest_discover_tests(MatrixTests)
+    gtest_discover_tests(ThermodynamicsEngineTests)
+    gtest_discover_tests(QuantumEngineTests)
+    gtest_discover_tests(ChaosEngineTests)
+    gtest_discover_tests(EulerIntegratorTests)
     gtest_discover_tests(Vector2Tests)
     gtest_discover_tests(TaskTests)
     gtest_discover_tests(ClassicalEngineTests)
