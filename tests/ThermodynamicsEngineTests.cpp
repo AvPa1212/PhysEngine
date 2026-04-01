@@ -34,12 +34,13 @@ TEST(ThermodynamicsEngineTest, PureStateHasZeroEntropy) {
 // ---- Uniform distribution: maximum entropy ----
 
 TEST(ThermodynamicsEngineTest, UniformDistributionHasMaximumEntropy) {
-    // p_i = 0.25 for each of 4 states  →  S = -4*(0.25*log(0.25)) = log(4)
+    // p_i = 1/QUANTUM_DIM for each state  →  S = -QUANTUM_DIM * k * p * log(p)
     Task task = makeUniformTask();
 
     ThermodynamicsEngine::updateEntropy(task);
 
-    double expected = -4.0 * Config::ENTROPY_CONSTANT * 0.25 * std::log(0.25);
+    const double p = 1.0 / static_cast<double>(Config::QUANTUM_DIM);
+    const double expected = -Config::QUANTUM_DIM * Config::ENTROPY_CONSTANT * p * std::log(p);
     EXPECT_NEAR(task.entropy, expected, 1e-10);
 }
 
