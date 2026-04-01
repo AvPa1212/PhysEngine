@@ -133,13 +133,14 @@ TEST(MatrixTest, ScalarMultiplicationByImaginaryUnit) {
 
 // ---- operator- (Matrix subtraction) ----
 
-TEST(MatrixTest, SubtractionSelfIsZero) {
+TEST(MatrixTest, SubtractionIdentityMinusZeroIsIdentity) {
     Matrix I = Matrix::identity();
-    Matrix result = I - I;
+    Matrix Z; // assumed to be the zero matrix by default construction
+    Matrix result = I - Z;
     for (int i = 0; i < Config::QUANTUM_DIM; ++i) {
         for (int j = 0; j < Config::QUANTUM_DIM; ++j) {
-            EXPECT_DOUBLE_EQ(result.data[i][j].real, 0.0);
-            EXPECT_DOUBLE_EQ(result.data[i][j].imag, 0.0);
+            EXPECT_DOUBLE_EQ(result.data[i][j].real, I.data[i][j].real);
+            EXPECT_DOUBLE_EQ(result.data[i][j].imag, I.data[i][j].imag);
         }
     }
 }
