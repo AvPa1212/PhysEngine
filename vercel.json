@@ -3,10 +3,13 @@
   "installCommand": "npm --prefix momentum-ui install",
   "buildCommand": "npm --prefix momentum-ui run build:vercel",
   "outputDirectory": "momentum-ui/dist",
-  "rewrites": [
+  "routes": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ],
   "headers": [
