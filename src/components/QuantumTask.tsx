@@ -98,11 +98,27 @@ const QuantumTask = ({ engine, title, difficulty, onRemove }) => {
     // Start the animation loop immediately after setup.
     animate();
 
-    // Cleanup: cancel the animation frame when the component unmounts to
-    // prevent updates on an unmounted component and free the render loop.
+    // Cleanup: free all resources when the component unmounts or the effect
+    // re-runs (e.g. difficulty change) to prevent memory leaks and duplicate canvases.
     return () => {
+      // Stop the render loop before disposing anything it touches.
       cancelAnimationFrame(frameId);
-      // We should ideally have a Task_Delete in the bridge to free memory
+
+      // Free the C++ Task object allocated in the WASM heap.
+      if (taskPtr.current) {
+        engine.Task_Destroy(taskPtr.current);
+        taskPtr.current = null;
+      }
+
+      // Release GPU/CPU memory held by Three.js objects.
+      geo.dispose();
+      mat.dispose();
+      renderer.dispose();
+
+      // Remove the canvas that was appended to the mount node.
+      if (mountRef.current && renderer.domElement.parentNode === mountRef.current) {
+        mountRef.current.removeChild(renderer.domElement);
+      }
     };
   }, [engine, difficulty]); // Re-run setup if the engine module or difficulty changes.
 

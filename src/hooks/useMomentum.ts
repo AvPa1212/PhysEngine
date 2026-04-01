@@ -59,8 +59,13 @@ export function useMomentum() {
     // Append to <body> to trigger the browser's script download.
     document.body.appendChild(script);
 
-    // No cleanup needed: the WASM module persists for the page lifetime and
-    // the script tag is harmless to leave in the DOM.
+    // Remove the injected script tag on cleanup to avoid duplicate script
+    // elements if the effect is re-invoked (e.g. React StrictMode double-invoke).
+    return () => {
+      if (script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
+    };
   }, []); // Empty dependency array — run once on mount.
 
   return { engine, isReady };

@@ -115,7 +115,7 @@ public:
 
         // --- ENTROPY LOGIC ---
         // Accumulate entropy based on the total movement in phase space.
-        // We use a small multiplier (0.05) so it doesn't collapse too instantly.
+        // We use a small multiplier (0.001) so it doesn't collapse too instantly.
         // The L1 norm of the displacement vector is a cheap proxy for how much
         // the system moved; larger movements indicate more chaotic, energetic
         // behaviour and should raise entropy faster.
