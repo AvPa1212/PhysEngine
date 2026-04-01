@@ -7,7 +7,8 @@
 // Helper: task with all psi components equal to amp (uniform distribution)
 static Task makeUniformTask() {
     Task task;
-    const double amp = 0.5; // magnitudeSquared = 0.25 each; 4 * 0.25 = 1 (normalised)
+    // Choose amp so that sum_i |amp|^2 = 1 for any Config::QUANTUM_DIM (normalised uniform state)
+    const double amp = 1.0 / std::sqrt(static_cast<double>(Config::QUANTUM_DIM));
     for (int i = 0; i < Config::QUANTUM_DIM; ++i) {
         task.psi[i] = { amp, 0.0 };
     }
