@@ -44,16 +44,21 @@ workerScope.onmessage = async (e: MessageEvent<any>) => {
       try {
         // Import the Emscripten glue script (sets self.PhysEngine)
         importScripts(data.wasmPath);
-        const globalEngine = workerScope.PhysEngine;
+        const candidates = [
+          workerScope.PhysEngine,
+          workerScope.Module,
+          workerScope.createModule,
+          workerScope.MomentumCore,
+        ];
         const engineFactory =
-          typeof globalEngine === 'function'
-            ? globalEngine
-            : typeof globalEngine?.default === 'function'
-              ? globalEngine.default
-              : null;
+          candidates.find((factory) => typeof factory === 'function') ||
+          candidates
+            .map((candidate) => candidate?.default)
+            .find((factory) => typeof factory === 'function') ||
+          null;
 
         if (!engineFactory) {
-          throw new Error('PhysEngine factory missing on worker global scope');
+          throw new Error('No callable Emscripten factory found on worker global scope (expected one of PhysEngine/Module/createModule)');
         }
 
         Module = await engineFactory({

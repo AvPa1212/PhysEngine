@@ -19,16 +19,24 @@ export function useMomentum() {
       // do nothing and let the second mount handle initialisation.
       if (cancelled) return;
       try {
-        const globalEngine = (globalThis as any).PhysEngine;
+        const globals = globalThis as any;
+        const candidates = [
+          globals.PhysEngine,
+          globals.Module,
+          globals.createModule,
+          globals.MomentumCore,
+        ];
         const engineFactory =
-          typeof globalEngine === 'function'
-            ? globalEngine
-            : typeof globalEngine?.default === 'function'
-              ? globalEngine.default
-              : null;
+          candidates.find((factory) => typeof factory === 'function') ||
+          candidates
+            .map((candidate) => candidate?.default)
+            .find((factory) => typeof factory === 'function') ||
+          null;
 
         if (!engineFactory) {
-          throw new Error('MomentumCore loaded, but PhysEngine factory was not found on global scope.');
+          throw new Error(
+            'MomentumCore loaded, but no callable Emscripten factory was found on global scope (expected one of PhysEngine/Module/createModule).'
+          );
         }
 
         const Module = await engineFactory({

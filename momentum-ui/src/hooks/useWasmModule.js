@@ -26,16 +26,23 @@ export function useWasmModule() {
     script.onload = async () => {
       if (cancelled) return;
       try {
-        const globalEngine = globalThis.PhysEngine;
+        const candidates = [
+          globalThis.PhysEngine,
+          globalThis.Module,
+          globalThis.createModule,
+          globalThis.MomentumCore,
+        ];
         const engineFactory =
-          typeof globalEngine === 'function'
-            ? globalEngine
-            : typeof globalEngine?.default === 'function'
-              ? globalEngine.default
-              : null;
+          candidates.find((factory) => typeof factory === 'function') ||
+          candidates
+            .map((candidate) => candidate?.default)
+            .find((factory) => typeof factory === 'function') ||
+          null;
 
         if (!engineFactory) {
-          throw new Error('MomentumCore loaded, but PhysEngine factory was not found on global scope.');
+          throw new Error(
+            'MomentumCore loaded, but no callable Emscripten factory was found on global scope (expected one of PhysEngine/Module/createModule).'
+          );
         }
 
         const Module = await engineFactory({
