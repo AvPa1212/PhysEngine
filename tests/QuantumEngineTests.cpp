@@ -139,7 +139,9 @@ TEST(QuantumEngineTest, CollapseProbabilityZeroForZeroEntropy) {
 
 TEST(QuantumEngineTest, CollapseProbabilityOneForMaxEntropy) {
     Task task;
-    task.entropy = 1.38629436; // ln(4) = max entropy for 4-state system
+    const double maxEntropy =
+        std::log(static_cast<double>(Config::QUANTUM_DIM)) * Config::ENTROPY_CONSTANT;
+    task.entropy = maxEntropy;
     EXPECT_NEAR(QuantumEngine::calculateCollapseProbability(task), 1.0, 1e-6);
 }
 
