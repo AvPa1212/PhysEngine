@@ -31,10 +31,12 @@ public:
         }
 
         if (normSq > 0.0) {
-            double norm = std::sqrt(normSq);
+            // Multiply by the reciprocal instead of dividing each component,
+            // replacing 2*N divisions with one division and 2*N multiplications.
+            const double inv_norm = 1.0 / std::sqrt(normSq);
             for (auto& amp : task.psi) {
-                amp.real /= norm;
-                amp.imag /= norm;
+                amp.real *= inv_norm;
+                amp.imag *= inv_norm;
             }
         }
     }

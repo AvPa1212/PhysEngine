@@ -31,4 +31,7 @@ struct Task {
     double stressX = 1.0;
     double stressY = 1.0;
     double stressZ = 1.0;
+
+    // Simulation tracking
+    int stepCount = 0;
 };
