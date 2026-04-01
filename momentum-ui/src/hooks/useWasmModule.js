@@ -18,9 +18,11 @@ export function useWasmModule() {
 
   useEffect(() => {
     let cancelled = false;
+    const baseUrl = import.meta.env.BASE_URL || '/';
+    const webDistBase = `${baseUrl}web_dist/`;
 
     const script = document.createElement('script');
-    script.src = '/MomentumCore.js';
+    script.src = `${webDistBase}MomentumCore.js`;
     script.async = true;
 
     script.onload = async () => {
@@ -44,7 +46,7 @@ export function useWasmModule() {
             return globalFactory;
           }
 
-          const response = await fetch('/web_dist/MomentumCore.js', { cache: 'no-store' });
+          const response = await fetch(`${webDistBase}MomentumCore.js`, { cache: 'no-store' });
           const source = await response.text();
           const evaluatedFactory = new Function(
             `${source}\nreturn (typeof PhysEngine === "function" && PhysEngine) || (typeof Module === "function" && Module) || (typeof createModule === "function" && createModule) || (typeof MomentumCore === "function" && MomentumCore) || null;`
@@ -63,7 +65,7 @@ export function useWasmModule() {
 
         const Module = await engineFactory({
           locateFile: (path) =>
-            path.endsWith('.wasm') ? `/${path}` : path,
+            path.endsWith('.wasm') ? `${webDistBase}${path}` : path,
         });
 
         if (cancelled) return;
