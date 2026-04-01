@@ -1,0 +1,553 @@
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0b0f;
+    --bg2: #111318;
+    --bg3: #181c24;
+    --panel: #13151d;
+    --border: rgba(255,255,255,0.06);
+    --border2: rgba(255,255,255,0.12);
+    --accent: #4f8ef7;
+    --accent2: #a78bfa;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --coral: #f87171;
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --mono: 'Space Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  .app { background: var(--bg); font-family: var(--sans); color: var(--text); width: 100%; min-height: 820px; display: grid; grid-template-rows: 48px 1fr; overflow: hidden; }
+
+  /* topbar */
+  .topbar { background: var(--panel); border-bottom: 0.5px solid var(--border2); display: flex; align-items: center; padding: 0 16px; gap: 20px; }
+  .logo { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; color: var(--accent); display: flex; align-items: center; gap: 6px; }
+  .logo-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.4)} }
+  .topbar-tabs { display: flex; gap: 2px; margin-left: 24px; }
+  .tab { font-size: 12px; padding: 5px 12px; border-radius: 5px; cursor: pointer; color: var(--muted); letter-spacing: 0.02em; transition: all .15s; }
+  .tab.active { background: rgba(79,142,247,0.12); color: var(--accent); }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .sim-badge { font-family: var(--mono); font-size: 10px; background: rgba(52,211,153,0.1); color: var(--green); border: 0.5px solid rgba(52,211,153,0.25); padding: 3px 8px; border-radius: 4px; letter-spacing: 0.06em; display: flex; align-items: center; gap: 4px; }
+  .sim-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); animation: blink 1.2s ease-in-out infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+  .btn-sm { font-size: 11px; padding: 4px 10px; border-radius: 5px; border: 0.5px solid var(--border2); background: transparent; color: var(--muted); cursor: pointer; font-family: var(--sans); transition: all .15s; }
+  .btn-sm:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+
+  /* main layout */
+  .main { display: grid; grid-template-columns: 220px 1fr 260px; overflow: hidden; height: 100%; }
+
+  /* left sidebar */
+  .sidebar-left { background: var(--panel); border-right: 0.5px solid var(--border); padding: 14px 10px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+  .sidebar-section { margin-bottom: 10px; }
+  .sidebar-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); padding: 0 8px; margin-bottom: 6px; }
+  .task-item { padding: 9px 10px; border-radius: 7px; cursor: pointer; transition: background .12s; position: relative; overflow: hidden; }
+  .task-item:hover { background: rgba(255,255,255,0.03); }
+  .task-item.active { background: rgba(79,142,247,0.08); }
+  .task-name { font-size: 12px; font-weight: 500; color: var(--text); margin-bottom: 3px; }
+  .task-meta { display: flex; gap: 6px; align-items: center; }
+  .task-tag { font-size: 9px; font-family: var(--mono); padding: 1px 5px; border-radius: 3px; }
+  .tag-e { background: rgba(251,191,36,0.1); color: var(--amber); border: 0.5px solid rgba(251,191,36,0.2); }
+  .tag-h { background: rgba(248,113,113,0.1); color: var(--coral); border: 0.5px solid rgba(248,113,113,0.2); }
+  .tag-m { background: rgba(79,142,247,0.1); color: var(--accent); border: 0.5px solid rgba(79,142,247,0.2); }
+  .tag-l { background: rgba(52,211,153,0.08); color: var(--green); border: 0.5px solid rgba(52,211,153,0.2); }
+  .energy-bar-wrap { height: 2px; background: rgba(255,255,255,0.04); border-radius: 1px; margin-top: 6px; overflow: hidden; }
+  .energy-bar { height: 100%; border-radius: 1px; transition: width 1s ease; }
+
+  .add-btn { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 7px; border: 0.5px dashed rgba(255,255,255,0.1); background: transparent; color: var(--muted); font-size: 12px; font-family: var(--sans); cursor: pointer; width: 100%; text-align: left; transition: all .15s; margin-top: 4px; }
+  .add-btn:hover { color: var(--accent); border-color: rgba(79,142,247,0.3); }
+
+  /* canvas area */
+  .canvas-area { position: relative; background: var(--bg); overflow: hidden; }
+  .canvas-bg { position: absolute; inset: 0; }
+  .grid-lines { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 40px 40px; }
+  .canvas-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .canvas-ui { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; background: rgba(17,19,24,0.9); border: 0.5px solid var(--border2); border-radius: 10px; padding: 8px 12px; backdrop-filter: blur(8px); }
+  .ctrl-btn { width: 28px; height: 28px; border-radius: 6px; border: 0.5px solid var(--border2); background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .15s; font-size: 12px; font-family: var(--sans); }
+  .ctrl-btn:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .ctrl-btn.play { background: rgba(79,142,247,0.12); color: var(--accent); border-color: rgba(79,142,247,0.25); }
+  .ctrl-divider { width: 0.5px; height: 20px; background: var(--border2); margin: 0 2px; }
+  .ctrl-label { font-family: var(--mono); font-size: 10px; color: var(--muted); padding: 0 6px; letter-spacing: 0.05em; }
+  .canvas-overlay-label { position: absolute; font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; color: rgba(255,255,255,0.12); }
+
+  /* right sidebar */
+  .sidebar-right { background: var(--panel); border-left: 0.5px solid var(--border); padding: 14px 12px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+  .panel-title { font-size: 11px; font-family: var(--mono); letter-spacing: 0.07em; color: var(--muted); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .panel-title::before { content: '//'; color: rgba(255,255,255,0.15); font-size: 10px; }
+
+  .metric-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .metric-card { background: var(--bg3); border-radius: 8px; padding: 10px 11px; border: 0.5px solid var(--border); }
+  .metric-val { font-family: var(--mono); font-size: 18px; font-weight: 700; }
+  .metric-lbl { font-size: 10px; color: var(--muted); margin-top: 2px; letter-spacing: 0.03em; }
+
+  .physics-param { display: flex; flex-direction: column; gap: 8px; }
+  .param-row { display: flex; flex-direction: column; gap: 4px; }
+  .param-label { display: flex; justify-content: space-between; }
+  .param-name { font-size: 11px; color: var(--muted); font-family: var(--mono); font-size: 10px; letter-spacing: 0.04em; }
+  .param-val { font-size: 10px; font-family: var(--mono); color: var(--text); }
+  .param-track { height: 3px; background: rgba(255,255,255,0.06); border-radius: 2px; position: relative; cursor: pointer; }
+  .param-fill { height: 100%; border-radius: 2px; transition: width .3s ease; }
+  .param-thumb { width: 9px; height: 9px; border-radius: 50%; position: absolute; top: -3px; transform: translateX(-50%); transition: left .3s ease; cursor: grab; }
+
+  .entropy-chart { height: 56px; position: relative; }
+  .entropy-svg { width: 100%; height: 100%; }
+
+  .task-detail { background: var(--bg3); border-radius: 9px; padding: 11px 12px; border: 0.5px solid var(--border); }
+  .detail-name { font-size: 13px; font-weight: 500; margin-bottom: 8px; color: var(--text); }
+  .detail-row { display: flex; justify-content: space-between; font-size: 11px; padding: 4px 0; border-bottom: 0.5px solid var(--border); }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-key { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+  .detail-val { color: var(--text); font-family: var(--mono); font-size: 10px; }
+  .state-badge { font-size: 9px; font-family: var(--mono); padding: 2px 6px; border-radius: 3px; }
+  .state-active { background: rgba(52,211,153,0.1); color: var(--green); border: 0.5px solid rgba(52,211,153,0.25); }
+  .state-superpos { background: rgba(167,139,250,0.1); color: var(--accent2); border: 0.5px solid rgba(167,139,250,0.25); }
+  .state-decay { background: rgba(248,113,113,0.1); color: var(--coral); border: 0.5px solid rgba(248,113,113,0.2); }
+
+  .phase-model-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .model-pill { font-size: 10px; font-family: var(--mono); padding: 4px 8px; border-radius: 5px; cursor: pointer; transition: all .15s; letter-spacing: 0.04em; border: 0.5px solid transparent; }
+  .model-pill.on { background: rgba(79,142,247,0.12); color: var(--accent); border-color: rgba(79,142,247,0.3); }
+  .model-pill.off { background: transparent; color: var(--muted); border-color: var(--border2); }
+  .model-pill:hover { color: var(--text); }
+
+  .minimap { height: 70px; background: var(--bg); border-radius: 7px; border: 0.5px solid var(--border); position: relative; overflow: hidden; }
+  .minimap-grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 14px 14px; }
+  .minimap-particle { position: absolute; border-radius: 50%; }
+  .minimap-viewport { position: absolute; border: 0.5px solid rgba(79,142,247,0.4); border-radius: 2px; background: rgba(79,142,247,0.04); }
+</style>
+
+<div class="app">
+  <div class="topbar">
+    <div class="logo">
+      <div class="logo-dot"></div>
+      MOMENTUM
+    </div>
+    <div class="topbar-tabs">
+      <div class="tab active">Simulation</div>
+      <div class="tab">Phase Space</div>
+      <div class="tab">Analytics</div>
+      <div class="tab">Sandbox</div>
+    </div>
+    <div class="topbar-right">
+      <div class="sim-badge"><div class="sim-dot"></div>LIVE</div>
+      <button class="btn-sm">Export State</button>
+      <button class="btn-sm">⚙</button>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <!-- LEFT SIDEBAR -->
+    <div class="sidebar-left">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Active Particles</div>
+
+        <div class="task-item active">
+          <div class="task-name">Physics Engine Core</div>
+          <div class="task-meta">
+            <span class="task-tag tag-h">HIGH</span>
+            <span class="task-tag tag-e">E: 87.3</span>
+          </div>
+          <div class="energy-bar-wrap"><div class="energy-bar" style="width:87%;background:var(--coral)"></div></div>
+        </div>
+
+        <div class="task-item">
+          <div class="task-name">WebGL Renderer</div>
+          <div class="task-meta">
+            <span class="task-tag tag-h">HIGH</span>
+            <span class="task-tag tag-e">E: 62.1</span>
+          </div>
+          <div class="energy-bar-wrap"><div class="energy-bar" style="width:62%;background:var(--amber)"></div></div>
+        </div>
+
+        <div class="task-item">
+          <div class="task-name">API Layer</div>
+          <div class="task-meta">
+            <span class="task-tag tag-m">MED</span>
+            <span class="task-tag tag-e">E: 44.8</span>
+          </div>
+          <div class="energy-bar-wrap"><div class="energy-bar" style="width:45%;background:var(--accent)"></div></div>
+        </div>
+
+        <div class="task-item">
+          <div class="task-name">Chaos Model</div>
+          <div class="task-meta">
+            <span class="task-tag tag-m">MED</span>
+            <span class="task-tag tag-e">E: 31.0</span>
+          </div>
+          <div class="energy-bar-wrap"><div class="energy-bar" style="width:31%;background:var(--accent2)"></div></div>
+        </div>
+
+        <div class="task-item">
+          <div class="task-name">Quantum State Module</div>
+          <div class="task-meta">
+            <span class="task-tag tag-l">LOW</span>
+            <span class="task-tag tag-e">E: 12.7</span>
+          </div>
+          <div class="energy-bar-wrap"><div class="energy-bar" style="width:13%;background:var(--green)"></div></div>
+        </div>
+
+        <div class="task-item">
+          <div class="task-name">Analytics Engine</div>
+          <div class="task-meta">
+            <span class="task-tag tag-l">LOW</span>
+            <span class="task-tag tag-e">E: 8.4</span>
+          </div>
+          <div class="energy-bar-wrap"><div class="energy-bar" style="width:8%;background:var(--green)"></div></div>
+        </div>
+
+        <div class="task-item">
+          <div class="task-name">Task Interaction Graph</div>
+          <div class="task-meta">
+            <span class="task-tag tag-l">LOW</span>
+            <span class="task-tag tag-e">E: 5.2</span>
+          </div>
+          <div class="energy-bar-wrap"><div class="energy-bar" style="width:5%;background:rgba(52,211,153,0.6)"></div></div>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">Completed</div>
+        <div class="task-item" style="opacity:.4">
+          <div class="task-name" style="text-decoration:line-through;font-size:11px">Project Scaffolding</div>
+        </div>
+        <div class="task-item" style="opacity:.4">
+          <div class="task-name" style="text-decoration:line-through;font-size:11px">Tech Stack Selection</div>
+        </div>
+      </div>
+
+      <button class="add-btn">
+        <span style="font-size:14px;line-height:1">+</span> Inject particle
+      </button>
+    </div>
+
+    <!-- CENTER CANVAS -->
+    <div class="canvas-area">
+      <div class="canvas-bg">
+        <div class="grid-lines"></div>
+      </div>
+
+      <div class="canvas-overlay-label" style="top:12px;left:14px">PHASE SPACE // t=00:42:17</div>
+      <div class="canvas-overlay-label" style="top:12px;right:14px">Δt = 0.016s</div>
+      <div class="canvas-overlay-label" style="bottom:56px;left:14px">p (momentum)</div>
+      <div class="canvas-overlay-label" style="bottom:56px;right:14px">x (position)</div>
+
+      <svg class="canvas-svg" id="mainSvg" viewBox="0 0 640 520" xmlns="http://www.w3.org/2000/svg">
+        <!-- Axes -->
+        <line x1="60" y1="460" x2="600" y2="460" stroke="rgba(255,255,255,0.06)" stroke-width="0.5"/>
+        <line x1="60" y1="60" x2="60" y2="460" stroke="rgba(255,255,255,0.06)" stroke-width="0.5"/>
+
+        <!-- Orbit trails -->
+        <ellipse cx="320" cy="260" rx="180" ry="120" fill="none" stroke="rgba(79,142,247,0.06)" stroke-width="1" stroke-dasharray="3 6"/>
+        <ellipse cx="320" cy="260" rx="120" ry="80" fill="none" stroke="rgba(167,139,250,0.05)" stroke-width="1" stroke-dasharray="2 8"/>
+        <ellipse cx="320" cy="260" rx="60" ry="40" fill="none" stroke="rgba(52,211,153,0.07)" stroke-width="1" stroke-dasharray="1 10"/>
+
+        <!-- Particle trails -->
+        <polyline points="200,170 215,180 230,190 248,200 265,205" fill="none" stroke="rgba(248,113,113,0.3)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline points="370,130 385,148 400,162 412,178 418,192" fill="none" stroke="rgba(251,191,36,0.25)" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline points="460,320 448,308 435,298 420,290" fill="none" stroke="rgba(79,142,247,0.2)" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
+
+        <!-- Attractor glow -->
+        <radialGradient id="aGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#4f8ef7" stop-opacity="0.08"/>
+          <stop offset="100%" stop-color="#4f8ef7" stop-opacity="0"/>
+        </radialGradient>
+        <circle cx="320" cy="260" r="90" fill="url(#aGlow)"/>
+        <circle cx="320" cy="260" r="3" fill="rgba(79,142,247,0.3)"/>
+        <circle cx="320" cy="260" r="7" fill="none" stroke="rgba(79,142,247,0.15)" stroke-width="0.5"/>
+
+        <!-- Main particles -->
+
+        <!-- P1: Physics Engine Core - HIGH energy -->
+        <g id="p1" class="particle" style="animation: orbit1 8s linear infinite">
+          <circle cx="265" cy="205" r="14" fill="rgba(248,113,113,0.12)" stroke="rgba(248,113,113,0.6)" stroke-width="1"/>
+          <circle cx="265" cy="205" r="7" fill="rgba(248,113,113,0.8)"/>
+          <text x="265" y="184" text-anchor="middle" font-size="9" font-family="Space Mono" fill="rgba(248,113,113,0.8)" letter-spacing="0.05em">PHY_ENGINE</text>
+          <text x="265" y="175" text-anchor="middle" font-size="8" font-family="Space Mono" fill="rgba(255,255,255,0.25)">87.3 J</text>
+        </g>
+
+        <!-- P2: WebGL -->
+        <g>
+          <circle cx="418" cy="192" r="11" fill="rgba(251,191,36,0.1)" stroke="rgba(251,191,36,0.5)" stroke-width="1"/>
+          <circle cx="418" cy="192" r="6" fill="rgba(251,191,36,0.75)"/>
+          <text x="418" y="175" text-anchor="middle" font-size="9" font-family="Space Mono" fill="rgba(251,191,36,0.7)" letter-spacing="0.05em">WEBGL</text>
+          <text x="418" y="166" text-anchor="middle" font-size="8" font-family="Space Mono" fill="rgba(255,255,255,0.2)">62.1 J</text>
+        </g>
+
+        <!-- P3: API -->
+        <g>
+          <circle cx="420" cy="290" r="9" fill="rgba(79,142,247,0.1)" stroke="rgba(79,142,247,0.5)" stroke-width="1"/>
+          <circle cx="420" cy="290" r="5" fill="rgba(79,142,247,0.8)"/>
+          <text x="420" y="273" text-anchor="middle" font-size="9" font-family="Space Mono" fill="rgba(79,142,247,0.7)">API</text>
+          <text x="420" y="264" text-anchor="middle" font-size="8" font-family="Space Mono" fill="rgba(255,255,255,0.2)">44.8 J</text>
+        </g>
+
+        <!-- P4: Chaos -->
+        <g>
+          <circle cx="230" cy="310" r="8" fill="rgba(167,139,250,0.1)" stroke="rgba(167,139,250,0.5)" stroke-width="1"/>
+          <circle cx="230" cy="310" r="4" fill="rgba(167,139,250,0.8)"/>
+          <text x="230" y="295" text-anchor="middle" font-size="9" font-family="Space Mono" fill="rgba(167,139,250,0.7)">CHAOS</text>
+        </g>
+
+        <!-- P5: Quantum - dim, low energy, with superposition rings -->
+        <g>
+          <circle cx="160" cy="380" r="6" fill="rgba(52,211,153,0.05)" stroke="rgba(52,211,153,0.3)" stroke-width="0.5" stroke-dasharray="2 3"/>
+          <circle cx="160" cy="380" r="3" fill="rgba(52,211,153,0.4)"/>
+          <circle cx="160" cy="380" r="12" fill="none" stroke="rgba(52,211,153,0.1)" stroke-width="0.5" stroke-dasharray="1 4"/>
+          <text x="160" y="366" text-anchor="middle" font-size="8" font-family="Space Mono" fill="rgba(52,211,153,0.4)">QUANTUM</text>
+        </g>
+
+        <!-- P6: Analytics - very dim -->
+        <g>
+          <circle cx="490" cy="370" r="5" fill="rgba(52,211,153,0.05)" stroke="rgba(52,211,153,0.2)" stroke-width="0.5"/>
+          <circle cx="490" cy="370" r="2.5" fill="rgba(52,211,153,0.3)"/>
+          <text x="490" y="358" text-anchor="middle" font-size="8" font-family="Space Mono" fill="rgba(52,211,153,0.3)">ANALYTICS</text>
+        </g>
+
+        <!-- P7: Task Graph - faint -->
+        <g>
+          <circle cx="540" cy="220" r="4" fill="rgba(52,211,153,0.04)" stroke="rgba(52,211,153,0.15)" stroke-width="0.5"/>
+          <circle cx="540" cy="220" r="2" fill="rgba(52,211,153,0.25)"/>
+        </g>
+
+        <!-- Spring connections -->
+        <line x1="265" y1="205" x2="418" y2="192" stroke="rgba(255,255,255,0.06)" stroke-width="0.5" stroke-dasharray="3 5"/>
+        <line x1="418" y1="192" x2="420" y2="290" stroke="rgba(255,255,255,0.05)" stroke-width="0.5" stroke-dasharray="3 5"/>
+        <line x1="265" y1="205" x2="230" y2="310" stroke="rgba(255,255,255,0.04)" stroke-width="0.5" stroke-dasharray="3 5"/>
+
+        <!-- Force vector on selected particle -->
+        <line x1="265" y1="205" x2="295" y2="185" stroke="rgba(248,113,113,0.5)" stroke-width="1" marker-end="url(#arrowRed)"/>
+        <defs>
+          <marker id="arrowRed" markerWidth="5" markerHeight="5" refX="3" refY="2.5" orient="auto">
+            <polygon points="0 0, 5 2.5, 0 5" fill="rgba(248,113,113,0.6)"/>
+          </marker>
+        </defs>
+
+        <!-- Lorenz attractor hint, bottom-left inset -->
+        <g transform="translate(75, 350) scale(0.55)">
+          <text x="0" y="-8" font-size="9" font-family="Space Mono" fill="rgba(255,255,255,0.2)" letter-spacing="0.06em">LORENZ ATTRACTOR</text>
+          <path d="M10,50 Q20,20 40,30 Q60,40 65,20 Q70,0 55,10 Q40,20 35,40 Q30,60 45,65 Q60,70 70,55 Q80,40 70,30" fill="none" stroke="rgba(167,139,250,0.35)" stroke-width="1.2"/>
+          <path d="M10,55 Q25,35 38,28 Q52,22 58,12 Q63,2 52,8 Q41,14 38,38 Q35,58 48,62 Q60,66 68,54 Q76,42 67,33" fill="none" stroke="rgba(167,139,250,0.18)" stroke-width="0.8"/>
+        </g>
+      </svg>
+
+      <!-- Controls -->
+      <div class="canvas-ui">
+        <button class="ctrl-btn play">▶</button>
+        <button class="ctrl-btn">⏸</button>
+        <button class="ctrl-btn">↺</button>
+        <div class="ctrl-divider"></div>
+        <div class="ctrl-label">1×</div>
+        <button class="ctrl-btn">–</button>
+        <button class="ctrl-btn">+</button>
+        <div class="ctrl-divider"></div>
+        <button class="ctrl-btn">⚡</button>
+        <button class="ctrl-btn">⊕</button>
+        <div class="ctrl-divider"></div>
+        <button class="ctrl-btn">⊞</button>
+      </div>
+    </div>
+
+    <!-- RIGHT SIDEBAR -->
+    <div class="sidebar-right">
+
+      <!-- System metrics -->
+      <div>
+        <div class="panel-title">system state</div>
+        <div class="metric-row">
+          <div class="metric-card">
+            <div class="metric-val" style="color:var(--amber)">247.6</div>
+            <div class="metric-lbl">Total Energy (J)</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-val" style="color:var(--coral)">0.61</div>
+            <div class="metric-lbl">Entropy (S)</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-val" style="color:var(--accent)">7</div>
+            <div class="metric-lbl">Particles</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-val" style="color:var(--green)">71%</div>
+            <div class="metric-lbl">Efficiency</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Entropy sparkline -->
+      <div>
+        <div class="panel-title">entropy over time</div>
+        <div class="entropy-chart">
+          <svg class="entropy-svg" viewBox="0 0 236 56" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="eGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#f87171" stop-opacity="0.25"/>
+                <stop offset="100%" stop-color="#f87171" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path d="M0,48 L20,44 L40,40 L60,36 L80,38 L100,34 L120,30 L140,26 L155,28 L170,22 L185,20 L200,18 L220,16 L236,14 L236,56 L0,56Z" fill="url(#eGrad)"/>
+            <path d="M0,48 L20,44 L40,40 L60,36 L80,38 L100,34 L120,30 L140,26 L155,28 L170,22 L185,20 L200,18 L220,16 L236,14" fill="none" stroke="rgba(248,113,113,0.7)" stroke-width="1.5" stroke-linejoin="round"/>
+            <circle cx="236" cy="14" r="2.5" fill="var(--coral)"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Physics params -->
+      <div>
+        <div class="panel-title">physics params</div>
+        <div class="physics-param">
+          <div class="param-row">
+            <div class="param-label"><span class="param-name">FRICTION</span><span class="param-val">0.12</span></div>
+            <div class="param-track">
+              <div class="param-fill" style="width:22%;background:var(--accent)"></div>
+              <div class="param-thumb" style="left:22%;background:var(--accent)"></div>
+            </div>
+          </div>
+          <div class="param-row">
+            <div class="param-label"><span class="param-name">COUPLING</span><span class="param-val">0.55</span></div>
+            <div class="param-track">
+              <div class="param-fill" style="width:55%;background:var(--accent2)"></div>
+              <div class="param-thumb" style="left:55%;background:var(--accent2)"></div>
+            </div>
+          </div>
+          <div class="param-row">
+            <div class="param-label"><span class="param-name">DECAY_RATE</span><span class="param-val">0.08</span></div>
+            <div class="param-track">
+              <div class="param-fill" style="width:15%;background:var(--coral)"></div>
+              <div class="param-thumb" style="left:15%;background:var(--coral)"></div>
+            </div>
+          </div>
+          <div class="param-row">
+            <div class="param-label"><span class="param-name">CHAOS_ε</span><span class="param-val">0.31</span></div>
+            <div class="param-track">
+              <div class="param-fill" style="width:60%;background:var(--amber)"></div>
+              <div class="param-thumb" style="left:60%;background:var(--amber)"></div>
+            </div>
+          </div>
+          <div class="param-row">
+            <div class="param-label"><span class="param-name">GRAVITY</span><span class="param-val">9.8</span></div>
+            <div class="param-track">
+              <div class="param-fill" style="width:40%;background:var(--green)"></div>
+              <div class="param-thumb" style="left:40%;background:var(--green)"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active models -->
+      <div>
+        <div class="panel-title">active models</div>
+        <div class="phase-model-row">
+          <div class="model-pill on">CLASSICAL</div>
+          <div class="model-pill on">ENERGY</div>
+          <div class="model-pill on">THERMO</div>
+          <div class="model-pill off">CHAOS</div>
+          <div class="model-pill off">QUANTUM</div>
+        </div>
+      </div>
+
+      <!-- Selected task detail -->
+      <div>
+        <div class="panel-title">selected particle</div>
+        <div class="task-detail">
+          <div class="detail-name">Physics Engine Core</div>
+          <div class="detail-row">
+            <span class="detail-key">STATE</span>
+            <span class="state-badge state-active">ACTIVE</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-key">MASS (DIFF)</span>
+            <span class="detail-val">8.4</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-key">VELOCITY</span>
+            <span class="detail-val">2.31 u/s</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-key">KE</span>
+            <span class="detail-val">52.1 J</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-key">PE</span>
+            <span class="detail-val">35.2 J</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-key">DEADLINE</span>
+            <span class="detail-val" style="color:var(--coral)">T-4d</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-key">ΔS contrib</span>
+            <span class="detail-val">+0.031</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Minimap -->
+      <div>
+        <div class="panel-title">minimap</div>
+        <div class="minimap">
+          <div class="minimap-grid"></div>
+          <div class="minimap-viewport" style="left:20%;top:20%;width:55%;height:60%"></div>
+          <div class="minimap-particle" style="width:6px;height:6px;background:rgba(248,113,113,0.8);left:38%;top:35%"></div>
+          <div class="minimap-particle" style="width:5px;height:5px;background:rgba(251,191,36,0.7);left:62%;top:30%"></div>
+          <div class="minimap-particle" style="width:4px;height:4px;background:rgba(79,142,247,0.8);left:63%;top:52%"></div>
+          <div class="minimap-particle" style="width:4px;height:4px;background:rgba(167,139,250,0.7);left:34%;top:56%"></div>
+          <div class="minimap-particle" style="width:3px;height:3px;background:rgba(52,211,153,0.5);left:22%;top:68%"></div>
+          <div class="minimap-particle" style="width:3px;height:3px;background:rgba(52,211,153,0.4);left:74%;top:66%"></div>
+          <div class="minimap-particle" style="width:2px;height:2px;background:rgba(52,211,153,0.3);left:82%;top:38%"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  const tabs = document.querySelectorAll('.tab');
+  tabs.forEach(t => t.addEventListener('click', () => {
+    tabs.forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+  }));
+
+  const pills = document.querySelectorAll('.model-pill');
+  pills.forEach(p => p.addEventListener('click', () => {
+    p.classList.toggle('on');
+    p.classList.toggle('off');
+  }));
+
+  const taskItems = document.querySelectorAll('.task-item');
+  taskItems.forEach(t => t.addEventListener('click', () => {
+    taskItems.forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+  }));
+
+  const ctrlBtns = document.querySelectorAll('.ctrl-btn');
+  ctrlBtns.forEach(b => b.addEventListener('click', function() {
+    if(this.textContent === '▶') {
+      this.textContent = '▶';
+      this.classList.add('play');
+    }
+  }));
+
+  let t = 0;
+  const p1 = document.querySelector('#p1');
+  function animate() {
+    t += 0.008;
+    const x = 320 + Math.cos(t) * 55 + Math.sin(t * 0.7) * 20;
+    const y = 260 + Math.sin(t) * 45 + Math.cos(t * 1.3) * 15;
+    if(p1) {
+      const circles = p1.querySelectorAll('circle');
+      const texts = p1.querySelectorAll('text');
+      if(circles[0]) { circles[0].setAttribute('cx', x); circles[0].setAttribute('cy', y); }
+      if(circles[1]) { circles[1].setAttribute('cx', x); circles[1].setAttribute('cy', y); }
+      if(texts[0]) { texts[0].setAttribute('x', x); texts[0].setAttribute('y', y - 21); }
+      if(texts[1]) { texts[1].setAttribute('x', x); texts[1].setAttribute('y', y - 30); }
+    }
+    requestAnimationFrame(animate);
+  }
+  animate();
+</script>

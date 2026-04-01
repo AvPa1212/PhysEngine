@@ -20,9 +20,12 @@
 
 /* eslint-disable no-restricted-globals */
 
-let Module = null;
-const tasks = new Map(); // taskId → WASM Task pointer
-let simInterval = null;
+declare function importScripts(...urls: string[]): void;
+
+const workerScope = self as any;
+let Module: any = null;
+const tasks = new Map<string, number>(); // taskId → WASM Task pointer
+let simInterval: ReturnType<typeof setInterval> | null = null;
 
 const STEP_MS = 1000 / 60; // ≈ 16.67 ms target
 const ENTROPY_THRESHOLD = 1.5;
@@ -31,7 +34,7 @@ const SYSTEM_OVERHEAT_TASK_COUNT = 8;
 
 // ── Message handler ─────────────────────────────────────────────────────────
 
-self.onmessage = async (e) => {
+workerScope.onmessage = async (e: MessageEvent<any>) => {
   const { type, ...data } = e.data;
 
   switch (type) {
@@ -41,14 +44,14 @@ self.onmessage = async (e) => {
       try {
         // Import the Emscripten glue script (sets self.PhysEngine)
         importScripts(data.wasmPath);
-        Module = await self.PhysEngine({
-          locateFile: (path) =>
+        Module = await workerScope.PhysEngine({
+          locateFile: (path: string) =>
             path.endsWith('.wasm') ? data.wasmDir + path : path,
         });
-        self.postMessage({ type: 'READY' });
+        workerScope.postMessage({ type: 'READY' });
         startSimulation();
       } catch (err) {
-        self.postMessage({
+        workerScope.postMessage({
           type: 'ERROR',
           message: `Worker WASM init failed: ${data.wasmPath} – ${err?.message || 'unknown error'}`,
         });
@@ -73,7 +76,7 @@ self.onmessage = async (e) => {
         Module.Task_SetStress(ptr, sx, sy, sz);
       }
       tasks.set(data.taskId, ptr);
-      self.postMessage({ type: 'TASK_CREATED', taskId: data.taskId });
+      workerScope.postMessage({ type: 'TASK_CREATED', taskId: data.taskId });
       break;
     }
 
@@ -120,7 +123,7 @@ self.onmessage = async (e) => {
       const ptr = tasks.get(data.taskId);
       if (ptr && Module.State_Serialize) {
         const json = Module.State_Serialize(ptr);
-        self.postMessage({
+        workerScope.postMessage({
           type: 'SERIALIZED',
           taskId: data.taskId,
           state: json,
@@ -151,10 +154,10 @@ function startSimulation() {
     if (!Module || tasks.size === 0) return;
 
     const startTime = performance.now();
-    const updates = {};
-    const events = [];
+    const updates: Record<string, any> = {};
+    const events: Array<{ type: string; [key: string]: any }> = [];
 
-    for (const [taskId, ptr] of tasks) {
+    tasks.forEach((ptr, taskId) => {
       // Advance physics one deterministic step
       Module.Engine_UpdateChaos(ptr);
 
@@ -182,11 +185,11 @@ function startSimulation() {
         // Auto-collapse to reset entropy
         Module.Engine_PerformQuantumCollapse(ptr);
       }
-    }
+    });
 
     const execTime = performance.now() - startTime;
 
-    self.postMessage({
+    workerScope.postMessage({
       type: 'STATE_UPDATE',
       tasks: updates,
       events,
@@ -195,7 +198,7 @@ function startSimulation() {
 
     // Emit SystemOverheat when the worker manages too many concurrent tasks.
     if (tasks.size >= SYSTEM_OVERHEAT_TASK_COUNT) {
-      self.postMessage({
+      workerScope.postMessage({
         type: 'STATE_UPDATE',
         tasks: {},
         events: [{ type: 'SystemOverheat', taskCount: tasks.size }],
@@ -211,8 +214,10 @@ function stopSimulation() {
     simInterval = null;
   }
   // Explicit cleanup – free every WASM allocation
-  for (const [, ptr] of tasks) {
+  tasks.forEach((ptr) => {
     if (Module) Module.Task_Destroy(ptr);
-  }
+  });
   tasks.clear();
 }
+
+export {};

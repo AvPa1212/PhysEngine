@@ -9,6 +9,7 @@
 class SimulationEngine {
 public:
     std::vector<Task> tasks;
+    bool paused = false;
 
     SimulationEngine() {
         // Pre-allocate to prevent dynamic allocation during loop
@@ -16,6 +17,9 @@ public:
     }
 
     void update() {
+        // When paused, skip integration so task states remain unchanged
+        if (paused) return;
+
         for (auto& task : tasks) {
             ClassicalEngine::integrateRK4(task);
             QuantumEngine::evolve(task);

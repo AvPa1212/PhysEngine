@@ -36,6 +36,7 @@ else()
     # Shared Library for Python/WSL use
     add_library(MomentumCore SHARED ${LIB_SOURCES})
     target_include_directories(MomentumCore PUBLIC ${INC_DIR})
+    target_link_libraries(MomentumCore PUBLIC m)
 
     # Standard Linux/Windows Compile Options
     if(MSVC)
@@ -58,5 +59,123 @@ else()
     target_link_libraries(PhysicsTests PRIVATE MomentumCore)
     target_link_libraries(QuantumTests PRIVATE MomentumCore)
     target_link_libraries(SerializationTests PRIVATE MomentumCore)
+
+    # Google Test for unit tests
+    include(FetchContent)
+    FetchContent_Declare(
+        googletest
+        URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
+    )
+    # Prevent overriding the parent project's compiler/linker settings on Windows
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
+
+    # RapidCheck for property-based tests
+    FetchContent_Declare(
+        rapidcheck
+        URL https://github.com/emil-e/rapidcheck/archive/refs/heads/master.zip
+    )
+    FetchContent_MakeAvailable(rapidcheck)
+
+    enable_testing()
+
+    add_executable(Vector2Tests tests/Vector2Tests.cpp)
+    target_include_directories(Vector2Tests PRIVATE ${INC_DIR})
+    target_link_libraries(Vector2Tests PRIVATE GTest::gtest_main m)
+
+    add_executable(TaskTests tests/TaskTests.cpp)
+    target_include_directories(TaskTests PRIVATE ${INC_DIR})
+    target_link_libraries(TaskTests PRIVATE GTest::gtest_main m)
+
+    add_executable(ClassicalEngineTests tests/ClassicalEngineTests.cpp)
+    target_include_directories(ClassicalEngineTests PRIVATE ${INC_DIR})
+    target_link_libraries(ClassicalEngineTests PRIVATE GTest::gtest_main m)
+
+    add_executable(PhysicsPropertiesTest tests/PhysicsPropertiesTest.cpp)
+    target_include_directories(PhysicsPropertiesTest PRIVATE
+        ${INC_DIR}
+        ${rapidcheck_SOURCE_DIR}/extras/gtest/include
+    )
+    target_link_libraries(PhysicsPropertiesTest PRIVATE GTest::gtest_main rapidcheck m)
+
+    add_executable(RK4IntegrationTest tests/RK4IntegrationTest.cpp)
+    target_include_directories(RK4IntegrationTest PRIVATE ${INC_DIR})
+    target_link_libraries(RK4IntegrationTest PRIVATE GTest::gtest_main m)
+
+    add_executable(NumericalPropertiesTest tests/NumericalPropertiesTest.cpp)
+    target_include_directories(NumericalPropertiesTest PRIVATE
+        ${INC_DIR}
+        ${rapidcheck_SOURCE_DIR}/extras/gtest/include
+    )
+    target_link_libraries(NumericalPropertiesTest PRIVATE GTest::gtest_main rapidcheck m)
+
+    add_executable(SimulationEngineTests tests/SimulationEngineTests.cpp)
+    target_include_directories(SimulationEngineTests PRIVATE ${INC_DIR})
+    target_link_libraries(SimulationEngineTests PRIVATE GTest::gtest_main m)
+
+    add_executable(SimulationPropertiesTest tests/SimulationPropertiesTest.cpp)
+    target_include_directories(SimulationPropertiesTest PRIVATE
+        ${INC_DIR}
+        ${rapidcheck_SOURCE_DIR}/extras/gtest/include
+    )
+    target_link_libraries(SimulationPropertiesTest PRIVATE GTest::gtest_main rapidcheck m)
+
+    add_executable(BridgeTests tests/BridgeTests.cpp)
+    target_include_directories(BridgeTests PRIVATE ${INC_DIR})
+    target_link_libraries(BridgeTests PRIVATE MomentumCore GTest::gtest_main)
+
+    add_executable(RoundTripPropertiesTest tests/RoundTripPropertiesTest.cpp)
+    target_include_directories(RoundTripPropertiesTest PRIVATE
+        ${INC_DIR}
+        ${rapidcheck_SOURCE_DIR}/extras/gtest/include
+    )
+    target_link_libraries(RoundTripPropertiesTest PRIVATE MomentumCore GTest::gtest_main rapidcheck)
+    target_compile_options(RoundTripPropertiesTest PRIVATE -Wno-sign-compare)
+
+    add_executable(PausePropertiesTest tests/PausePropertiesTest.cpp)
+    target_include_directories(PausePropertiesTest PRIVATE
+        ${INC_DIR}
+        ${rapidcheck_SOURCE_DIR}/extras/gtest/include
+    )
+    target_link_libraries(PausePropertiesTest PRIVATE GTest::gtest_main rapidcheck m)
+
+    add_executable(InvariantPropertiesTest tests/InvariantPropertiesTest.cpp)
+    target_include_directories(InvariantPropertiesTest PRIVATE
+        ${INC_DIR}
+        ${rapidcheck_SOURCE_DIR}/extras/gtest/include
+    )
+    target_link_libraries(InvariantPropertiesTest PRIVATE GTest::gtest_main rapidcheck m)
+
+    add_executable(StabilityPropertiesTest tests/StabilityPropertiesTest.cpp)
+    target_include_directories(StabilityPropertiesTest PRIVATE
+        ${INC_DIR}
+        ${rapidcheck_SOURCE_DIR}/extras/gtest/include
+    )
+    target_link_libraries(StabilityPropertiesTest PRIVATE GTest::gtest_main rapidcheck m)
+
+    add_executable(IntegrationTests tests/IntegrationTests.cpp)
+    target_include_directories(IntegrationTests PRIVATE ${INC_DIR})
+    target_link_libraries(IntegrationTests PRIVATE MomentumCore GTest::gtest_main)
+
+    add_executable(BenchmarkTests tests/BenchmarkTests.cpp)
+    target_include_directories(BenchmarkTests PRIVATE ${INC_DIR})
+    target_link_libraries(BenchmarkTests PRIVATE MomentumCore GTest::gtest_main)
+
+    include(GoogleTest)
+    gtest_discover_tests(Vector2Tests)
+    gtest_discover_tests(TaskTests)
+    gtest_discover_tests(ClassicalEngineTests)
+    gtest_discover_tests(PhysicsPropertiesTest)
+    gtest_discover_tests(RK4IntegrationTest)
+    gtest_discover_tests(NumericalPropertiesTest)
+    gtest_discover_tests(SimulationEngineTests)
+    gtest_discover_tests(SimulationPropertiesTest)
+    gtest_discover_tests(BridgeTests)
+    gtest_discover_tests(RoundTripPropertiesTest)
+    gtest_discover_tests(PausePropertiesTest)
+    gtest_discover_tests(InvariantPropertiesTest)
+    gtest_discover_tests(StabilityPropertiesTest)
+    gtest_discover_tests(IntegrationTests)
+    gtest_discover_tests(BenchmarkTests)
 
 endif()

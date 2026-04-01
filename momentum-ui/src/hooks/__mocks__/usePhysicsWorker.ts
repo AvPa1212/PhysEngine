@@ -16,7 +16,7 @@ export function usePhysicsWorker() {
     applyForce: () => {},
     setMass: () => {},
     collapse: () => {},
-    serialize: () => {},
+    serialize: async () => '',
     deserialize: () => {},
     eventBridge: null,
     perfMonitor: null,

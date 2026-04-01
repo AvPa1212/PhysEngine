@@ -6,8 +6,9 @@
  * is implemented.
  */
 export class EventBridge {
+  private _listeners: Map<string, Set<(payload: unknown) => void>>;
+
   constructor() {
-    /** @type {Map<string, Set<Function>>} */
     this._listeners = new Map();
   }
 
@@ -17,7 +18,7 @@ export class EventBridge {
    * @param {Function} callback - Handler receiving the event payload
    * @returns {Function} Unsubscribe function
    */
-  subscribe(eventType, callback) {
+  subscribe(eventType: string, callback: (payload: unknown) => void) {
     if (!this._listeners.has(eventType)) {
       this._listeners.set(eventType, new Set());
     }
@@ -37,7 +38,7 @@ export class EventBridge {
    * @param {string} eventType
    * @param {*} data - Event payload
    */
-  emit(eventType, data) {
+  emit(eventType: string, data: unknown) {
     const callbacks = this._listeners.get(eventType);
     if (callbacks) {
       callbacks.forEach((cb) => {

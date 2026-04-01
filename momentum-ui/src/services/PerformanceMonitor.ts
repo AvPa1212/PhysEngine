@@ -9,6 +9,12 @@
  * Uses a rolling window to keep memory bounded.
  */
 export class PerformanceMonitor {
+  private _windowSize: number;
+  private _frameTimes: number[];
+  private _execTimes: number[];
+  private _memoryUsage: number[];
+  private _lastTimestamp: number;
+
   /**
    * @param {number} windowSize - Number of samples to retain (default: 60)
    */
@@ -24,7 +30,7 @@ export class PerformanceMonitor {
    * Record a performance sample from the physics worker.
    * @param {{ execTime: number, taskCount: number }} sample
    */
-  record(sample) {
+  record(sample: { execTime?: number; taskCount?: number }) {
     const now = performance.now();
 
     // Track inter-frame time
@@ -41,8 +47,11 @@ export class PerformanceMonitor {
     }
 
     // Track memory usage (Chrome-only API)
-    if (typeof performance !== 'undefined' && performance.memory) {
-      this._memoryUsage.push(performance.memory.usedJSHeapSize);
+    const perfWithMemory = performance as Performance & {
+      memory?: { usedJSHeapSize: number };
+    };
+    if (typeof performance !== 'undefined' && perfWithMemory.memory) {
+      this._memoryUsage.push(perfWithMemory.memory.usedJSHeapSize);
       if (this._memoryUsage.length > this._windowSize) this._memoryUsage.shift();
     }
   }
@@ -52,7 +61,7 @@ export class PerformanceMonitor {
    * @returns {{ fps: number, avgFrameTimeMs: number, avgExecTimeMs: number, avgMemoryMB: number }}
    */
   getMetrics() {
-    const avg = (arr) =>
+    const avg = (arr: number[]) =>
       arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
 
     const avgFrameTime = avg(this._frameTimes);

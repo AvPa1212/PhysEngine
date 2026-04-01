@@ -212,3 +212,36 @@ Momentum is a hybrid research implementation exploring the intersection of:
 * Deterministic simulation
 * Interactive user experience
 * Computational thermodynamics metaphors
+
+---
+
+## Vercel Deployment
+
+This repository is configured for Vercel via `vercel.json`.
+
+### Build Target
+
+- Vercel builds the Vite app from `momentum-ui/`
+- Output directory: `momentum-ui/dist`
+- SPA routes are rewritten to `index.html`
+
+### WASM Runtime Files
+
+The app requires these runtime files at deploy time:
+
+- `momentum-ui/public/web_dist/MomentumCore.js`
+- `momentum-ui/public/web_dist/MomentumCore.wasm`
+
+Generate/update them locally before deployment:
+
+```bash
+python3 deploy_web.py
+```
+
+or
+
+```bash
+bash build_web.sh
+```
+
+Then commit the generated files under `momentum-ui/public/web_dist/` so Vercel can serve them.

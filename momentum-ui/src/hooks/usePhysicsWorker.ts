@@ -2,6 +2,17 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { EventBridge } from '../services/EventBridge';
 import { PerformanceMonitor } from '../services/PerformanceMonitor';
 
+type TaskState = {
+  stressX: number;
+  stressY: number;
+  stressZ: number;
+  entropy: number;
+  posX: number;
+  posY: number;
+  collapseProbability: number;
+  stepCount: number;
+};
+
 /**
  * usePhysicsWorker – React hook that moves the WASM physics simulation into a
  * dedicated Web Worker and provides a message-passing API to the React layer.
@@ -15,21 +26,25 @@ import { PerformanceMonitor } from '../services/PerformanceMonitor';
  *   This guarantees a 1:1 mapping of C++ pointers to React lifecycle.
  */
 export function usePhysicsWorker() {
-  const workerRef = useRef(null);
+  const workerRef = useRef<Worker | null>(null);
   const [isReady, setIsReady] = useState(false);
-  const [error, setError] = useState(null);
-  const [taskStates, setTaskStates] = useState({});
+  const [error, setError] = useState<string | null>(null);
+  const [taskStates, setTaskStates] = useState<Record<string, TaskState>>({});
   const eventBridgeRef = useRef(new EventBridge());
   const perfMonitorRef = useRef(new PerformanceMonitor());
 
   // Pending serialisation callbacks keyed by taskId.
-  const serializeCallbacksRef = useRef(new Map());
+  const serializeCallbacksRef = useRef(new Map<string, (state: string) => void>());
 
   useEffect(() => {
-    let worker;
+    const eventBridge = eventBridgeRef.current;
+    const perfMonitor = perfMonitorRef.current;
+    const baseUrl = import.meta.env.BASE_URL || '/';
+    const webDistBase = `${baseUrl}web_dist/`;
+    let worker: Worker;
     try {
       worker = new Worker(
-        new URL('../workers/physicsWorker.js', import.meta.url)
+        new URL('../workers/physicsWorker.ts', import.meta.url)
       );
     } catch {
       // Workers not available (e.g. test / SSR environment) – stay in loading.
@@ -37,7 +52,7 @@ export function usePhysicsWorker() {
     }
     workerRef.current = worker;
 
-    worker.onmessage = (e) => {
+    worker.onmessage = (e: MessageEvent<any>) => {
       const { type, ...data } = e.data;
 
       switch (type) {
@@ -49,7 +64,7 @@ export function usePhysicsWorker() {
           setTaskStates(data.tasks);
           // Forward engine events to the EventBridge
           if (data.events) {
-            data.events.forEach((evt) =>
+            data.events.forEach((evt: { type: string }) =>
               eventBridgeRef.current.emit(evt.type, evt)
             );
           }
@@ -94,30 +109,30 @@ export function usePhysicsWorker() {
     // Boot the worker – tell it where to find the WASM artefacts.
     worker.postMessage({
       type: 'INIT',
-      wasmPath: '/web_dist/MomentumCore.js',
-      wasmDir: '/web_dist/',
+      wasmPath: `${webDistBase}MomentumCore.js`,
+      wasmDir: webDistBase,
     });
 
     return () => {
       worker.postMessage({ type: 'STOP' });
       worker.terminate();
       workerRef.current = null;
-      eventBridgeRef.current.clear();
-      perfMonitorRef.current.reset();
+      eventBridge.clear();
+      perfMonitor.reset();
     };
   }, []);
 
   // ── Public API ──────────────────────────────────────────────────────────────
 
-  const createTask = useCallback((taskId, options = {}) => {
+  const createTask = useCallback((taskId: string, options: Record<string, unknown> = {}) => {
     workerRef.current?.postMessage({ type: 'CREATE_TASK', taskId, ...options });
   }, []);
 
-  const destroyTask = useCallback((taskId) => {
+  const destroyTask = useCallback((taskId: string) => {
     workerRef.current?.postMessage({ type: 'DESTROY_TASK', taskId });
   }, []);
 
-  const applyForce = useCallback((taskId, fx, fy, fz) => {
+  const applyForce = useCallback((taskId: string, fx: number, fy: number, fz: number) => {
     workerRef.current?.postMessage({
       type: 'APPLY_FORCE',
       taskId,
@@ -127,16 +142,16 @@ export function usePhysicsWorker() {
     });
   }, []);
 
-  const setMass = useCallback((taskId, mass) => {
+  const setMass = useCallback((taskId: string, mass: number) => {
     workerRef.current?.postMessage({ type: 'SET_MASS', taskId, mass });
   }, []);
 
-  const collapse = useCallback((taskId) => {
+  const collapse = useCallback((taskId: string) => {
     workerRef.current?.postMessage({ type: 'COLLAPSE', taskId });
   }, []);
 
-  const serialize = useCallback((taskId) => {
-    return new Promise((resolve, reject) => {
+  const serialize = useCallback((taskId: string) => {
+    return new Promise<string>((resolve, reject) => {
       if (!workerRef.current) {
         reject(new Error('Physics worker is not ready'));
         return;
@@ -146,7 +161,7 @@ export function usePhysicsWorker() {
     });
   }, []);
 
-  const deserialize = useCallback((taskId, state) => {
+  const deserialize = useCallback((taskId: string, state: string) => {
     workerRef.current?.postMessage({ type: 'DESERIALIZE', taskId, state });
   }, []);
 

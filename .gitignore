@@ -258,6 +258,12 @@ web_dist/
 # Wasm specific output types
 *.wasm
 *.js.mem
+
+# Keep Vercel runtime WASM artifacts for the Vite app
+!momentum-ui/public/web_dist/
+!momentum-ui/public/web_dist/.gitkeep
+!momentum-ui/public/web_dist/MomentumCore.js
+!momentum-ui/public/web_dist/MomentumCore.wasm
 *.js.symbols
 
 # Ignore the local dev server log and storage

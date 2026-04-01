@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
 
+type TaskInputProps = {
+  onAdd: (task: { title: string; difficulty: number }) => void;
+};
+
 /**
  * TaskInput – form for injecting a new objective into the workspace.
  * Exposes a title field and a difficulty/mass slider (1–10).
  */
-const TaskInput = ({ onAdd }) => {
+const TaskInput = ({ onAdd }: TaskInputProps) => {
   const [title, setTitle] = useState('');
   const [difficulty, setDifficulty] = useState(5);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const trimmed = title.trim();
     if (!trimmed) return;
@@ -37,7 +41,7 @@ const TaskInput = ({ onAdd }) => {
           max="10"
           step="1"
           value={difficulty}
-          onChange={(e) => setDifficulty(e.target.value)}
+          onChange={(e) => setDifficulty(Number(e.target.value))}
           className="difficulty-slider"
           aria-label="Task difficulty / mass"
         />

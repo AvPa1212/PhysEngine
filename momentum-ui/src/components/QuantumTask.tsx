@@ -1,6 +1,32 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as THREE from 'three';
 
+type TaskState = {
+  stressX: number;
+  stressY: number;
+  stressZ: number;
+  entropy: number;
+};
+
+type QuantumTaskProps = {
+  taskId: string;
+  title: string;
+  difficulty: number;
+  taskState?: TaskState;
+  onRemove: () => void;
+  onApplyForce: (taskId: string, fx: number, fy: number, fz: number) => void;
+  onCollapse: (taskId: string) => void;
+  onCreateTask: (taskId: string, opts: { mass: number }) => void;
+  onDestroyTask: (taskId: string) => void;
+};
+
+type ThreeRefs = {
+  sphere: THREE.Mesh;
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  renderer: THREE.WebGLRenderer;
+};
+
 /**
  * QuantumTask – Renders a single physics task as a Three.js sphere and drives
  * its state from a physics Web Worker.
@@ -26,11 +52,11 @@ const QuantumTask = ({
   onCollapse,
   onCreateTask,
   onDestroyTask,
-}) => {
-  const mountRef = useRef(null);
-  const threeRef = useRef(null);
+}: QuantumTaskProps) => {
+  const mountRef = useRef<HTMLDivElement | null>(null);
+  const threeRef = useRef<ThreeRefs | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = useRef(null);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // ── 1. Lifecycle: create / destroy C++ Task in the worker ──────────────
   useEffect(() => {
@@ -81,7 +107,7 @@ const QuantumTask = ({
     threeRef.current = { sphere, scene, camera, renderer };
 
     // Pure render loop – no physics calls, just redraw.
-    let frameId;
+    let frameId = 0;
     const animate = () => {
       frameId = requestAnimationFrame(animate);
       renderer.render(scene, camera);
@@ -117,7 +143,7 @@ const QuantumTask = ({
   // Scale factor converting normalised drag deltas to physics force magnitude.
   const FORCE_SCALE = 10;
 
-  const handlePointerDown = useCallback((e) => {
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     setIsDragging(true);
     const rect = e.currentTarget.getBoundingClientRect();
     dragStartRef.current = {
@@ -128,7 +154,7 @@ const QuantumTask = ({
   }, []);
 
   const handlePointerMove = useCallback(
-    (e) => {
+    (e: React.PointerEvent<HTMLDivElement>) => {
       if (!isDragging || !dragStartRef.current) return;
       const rect = e.currentTarget.getBoundingClientRect();
       const curX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -144,7 +170,7 @@ const QuantumTask = ({
     [isDragging, taskId, onApplyForce]
   );
 
-  const handlePointerUp = useCallback((e) => {
+  const handlePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     setIsDragging(false);
     dragStartRef.current = null;
     if (e?.currentTarget?.releasePointerCapture && e?.pointerId != null) {
@@ -152,7 +178,7 @@ const QuantumTask = ({
     }
   }, []);
 
-  const handlePointerCancel = useCallback((e) => {
+  const handlePointerCancel = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     setIsDragging(false);
     dragStartRef.current = null;
     if (e?.currentTarget?.releasePointerCapture && e?.pointerId != null) {

@@ -11,15 +11,22 @@ set(WEB_OUT_DIR "${CMAKE_SOURCE_DIR}/web_dist")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${WEB_OUT_DIR})
 
 # 2. Emscripten Linker Flags
-# -lembind: Enables the C++/JS binding classes
-# ALLOW_MEMORY_GROWTH: Prevents crashes if your simulation handles many tasks
-# MODULARIZE: Wraps everything in a clean JS Promise-based module
-set(EMSCRIPTEN_LINK_FLAGS 
+# --bind: Enables the C++/JS binding classes (Embind)
+# -sWASM=1: Explicitly request WebAssembly output
+# -sALLOW_MEMORY_GROWTH=1: Prevents crashes if simulation handles many tasks
+# -sMODULARIZE=1: Wraps everything in a clean JS Promise-based module
+# -sEXPORT_NAME: The name used in index.html to load the module
+# -sEXPORTED_FUNCTIONS: C API bridge functions exported to JavaScript
+# -sEXPORTED_RUNTIME_METHODS: Runtime helpers for calling C functions from JS
+# -O3: Maximum optimization for production WebAssembly
+set(EMSCRIPTEN_LINK_FLAGS
     "--bind"
-    "-s ALLOW_MEMORY_GROWTH=1"
-    "-s MODULARIZE=1"
-    "-s EXPORT_NAME='PhysEngine'"
-    "-s EXPORTED_RUNTIME_METHODS=['ccall','cwrap']"
+    "-sWASM=1"
+    "-sALLOW_MEMORY_GROWTH=1"
+    "-sMODULARIZE=1"
+    "-sEXPORT_NAME='PhysEngine'"
+    "-sEXPORTED_FUNCTIONS=['_Task_Create','_Task_Destroy','_Task_SetPosition','_Task_SetVelocity','_Task_SetMass','_Task_GetPositionX','_Task_GetPositionY','_Task_GetVelocityX','_Task_GetVelocityY','_Task_GetMass','_Task_GetStepCount','_Engine_IntegrateClassical','_State_Serialize','_State_Deserialize']"
+    "-sEXPORTED_RUNTIME_METHODS=['cwrap']"
     "-O3"
 )
 

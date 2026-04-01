@@ -56,5 +56,6 @@ public:
         task.acceleration = a1;
 
         task.deadlineTime -= dt;
+        task.stepCount++;
     }
 };
