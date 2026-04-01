@@ -54,7 +54,7 @@ extern "C" {
 
     /**
      * @brief Sets the 2-D world-space position of the task.
-     * @param taskPtr  Target task (must not be nullptr).
+     * @param taskPtr  Target task. Passing nullptr is safe and has no effect.
      * @param x        New X position (metres).
      * @param y        New Y position (metres).
      */
@@ -62,7 +62,7 @@ extern "C" {
 
     /**
      * @brief Sets the 2-D velocity of the task.
-     * @param taskPtr  Target task (must not be nullptr).
+     * @param taskPtr  Target task. Passing nullptr is safe and has no effect.
      * @param vx       New X velocity component (m/s).
      * @param vy       New Y velocity component (m/s).
      */
@@ -70,14 +70,14 @@ extern "C" {
 
     /**
      * @brief Sets the inertial mass of the task.
-     * @param taskPtr  Target task (must not be nullptr).
+     * @param taskPtr  Target task. Passing nullptr is safe and has no effect.
      * @param mass     Mass in kg (should be > 0 to avoid division-by-zero).
      */
     MOMENTUM_API void Task_SetMass(Task* taskPtr, double mass);
 
     /**
      * @brief Sets the Lorenz stress state of the task.
-     * @param taskPtr  Target task (must not be nullptr).
+     * @param taskPtr  Target task. Passing nullptr is safe and has no effect.
      * @param sx       Initial Lorenz X component.
      * @param sy       Initial Lorenz Y component.
      * @param sz       Initial Lorenz Z component.
