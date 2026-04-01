@@ -44,7 +44,19 @@ workerScope.onmessage = async (e: MessageEvent<any>) => {
       try {
         // Import the Emscripten glue script (sets self.PhysEngine)
         importScripts(data.wasmPath);
-        Module = await workerScope.PhysEngine({
+        const globalEngine = workerScope.PhysEngine;
+        const engineFactory =
+          typeof globalEngine === 'function'
+            ? globalEngine
+            : typeof globalEngine?.default === 'function'
+              ? globalEngine.default
+              : null;
+
+        if (!engineFactory) {
+          throw new Error('PhysEngine factory missing on worker global scope');
+        }
+
+        Module = await engineFactory({
           locateFile: (path: string) =>
             path.endsWith('.wasm') ? data.wasmDir + path : path,
         });

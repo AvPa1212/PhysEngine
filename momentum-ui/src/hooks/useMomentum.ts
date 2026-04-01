@@ -19,7 +19,19 @@ export function useMomentum() {
       // do nothing and let the second mount handle initialisation.
       if (cancelled) return;
       try {
-        const Module = await window.PhysEngine({
+        const globalEngine = (globalThis as any).PhysEngine;
+        const engineFactory =
+          typeof globalEngine === 'function'
+            ? globalEngine
+            : typeof globalEngine?.default === 'function'
+              ? globalEngine.default
+              : null;
+
+        if (!engineFactory) {
+          throw new Error('MomentumCore loaded, but PhysEngine factory was not found on global scope.');
+        }
+
+        const Module = await engineFactory({
           locateFile: (path) => path.endsWith('.wasm') ? `${webDistBase}${path}` : path
         });
         if (!cancelled) {

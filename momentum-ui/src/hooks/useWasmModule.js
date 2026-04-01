@@ -26,7 +26,19 @@ export function useWasmModule() {
     script.onload = async () => {
       if (cancelled) return;
       try {
-        const Module = await window.PhysEngine({
+        const globalEngine = globalThis.PhysEngine;
+        const engineFactory =
+          typeof globalEngine === 'function'
+            ? globalEngine
+            : typeof globalEngine?.default === 'function'
+              ? globalEngine.default
+              : null;
+
+        if (!engineFactory) {
+          throw new Error('MomentumCore loaded, but PhysEngine factory was not found on global scope.');
+        }
+
+        const Module = await engineFactory({
           locateFile: (path) =>
             path.endsWith('.wasm') ? `/${path}` : path,
         });
