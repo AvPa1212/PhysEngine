@@ -161,6 +161,10 @@ else()
     target_include_directories(BenchmarkTests PRIVATE ${INC_DIR})
     target_link_libraries(BenchmarkTests PRIVATE MomentumCore GTest::gtest_main)
 
+    add_executable(EulerVsRK4BenchmarkTest tests/EulerVsRK4BenchmarkTest.cpp)
+    target_include_directories(EulerVsRK4BenchmarkTest PRIVATE ${INC_DIR})
+    target_link_libraries(EulerVsRK4BenchmarkTest PRIVATE MomentumCore GTest::gtest_main)
+
     include(GoogleTest)
     gtest_discover_tests(Vector2Tests)
     gtest_discover_tests(TaskTests)
@@ -177,5 +181,6 @@ else()
     gtest_discover_tests(StabilityPropertiesTest)
     gtest_discover_tests(IntegrationTests)
     gtest_discover_tests(BenchmarkTests)
+    gtest_discover_tests(EulerVsRK4BenchmarkTest)
 
 endif()

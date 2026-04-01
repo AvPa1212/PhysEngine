@@ -58,4 +58,23 @@ public:
         task.deadlineTime -= dt;
         task.stepCount++;
     }
+
+    // First-order forward Euler integrator.
+    // Provided as a baseline for benchmarking accuracy and stability against
+    // the primary RK4 integrator (see integrateRK4).  Euler requires only a
+    // single force evaluation per step, making it faster per step but
+    // accumulating O(dt) global error versus RK4's O(dt^4).
+    static void integrateEuler(Task& task) {
+        const double dt      = Config::TIME_STEP;
+        const double inv_mass = 1.0 / task.mass;
+
+        const Vector2 a = computeForces(task, task.velocity) * inv_mass;
+
+        task.position     += task.velocity * dt;
+        task.velocity     += a             * dt;
+        task.acceleration  = a;
+
+        task.deadlineTime -= dt;
+        task.stepCount++;
+    }
 };
