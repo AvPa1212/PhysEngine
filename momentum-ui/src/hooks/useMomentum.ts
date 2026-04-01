@@ -19,25 +19,43 @@ export function useMomentum() {
       // do nothing and let the second mount handle initialisation.
       if (cancelled) return;
       try {
-        const globals = globalThis as any;
-        const candidates = [
-          globals.PhysEngine,
-          globals.Module,
-          globals.createModule,
-          globals.MomentumCore,
-        ];
-        const engineFactory =
-          candidates.find((factory) => typeof factory === 'function') ||
-          candidates
-            .map((candidate) => candidate?.default)
-            .find((factory) => typeof factory === 'function') ||
-          null;
+        const resolveFactory = async (): Promise<((moduleArg?: unknown) => Promise<unknown>)> => {
+          const globals = globalThis as any;
+          const candidates = [
+            globals.PhysEngine,
+            globals.Module,
+            globals.createModule,
+            globals.MomentumCore,
+          ];
+          const globalFactory =
+            candidates.find((factory) => typeof factory === 'function') ||
+            candidates
+              .map((candidate) => candidate?.default)
+              .find((factory) => typeof factory === 'function') ||
+            null;
 
-        if (!engineFactory) {
+          if (globalFactory) {
+            return globalFactory;
+          }
+
+          // Some hosts execute the script without attaching top-level vars to globalThis.
+          // Fallback: evaluate the downloaded script and return its factory symbol.
+          const response = await fetch(`${webDistBase}MomentumCore.js`, { cache: 'no-store' });
+          const source = await response.text();
+          const evaluatedFactory = new Function(
+            `${source}\nreturn (typeof PhysEngine === "function" && PhysEngine) || (typeof Module === "function" && Module) || (typeof createModule === "function" && createModule) || (typeof MomentumCore === "function" && MomentumCore) || null;`
+          )();
+
+          if (typeof evaluatedFactory === 'function') {
+            return evaluatedFactory;
+          }
+
           throw new Error(
-            'MomentumCore loaded, but no callable Emscripten factory was found on global scope (expected one of PhysEngine/Module/createModule).'
+            `MomentumCore loaded, but no callable Emscripten factory was found. HTTP ${response.status} content-type=${response.headers.get('content-type') || 'unknown'}`
           );
-        }
+        };
+
+        const engineFactory = await resolveFactory();
 
         const Module = await engineFactory({
           locateFile: (path) => path.endsWith('.wasm') ? `${webDistBase}${path}` : path

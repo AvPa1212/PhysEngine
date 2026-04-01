@@ -44,22 +44,40 @@ workerScope.onmessage = async (e: MessageEvent<any>) => {
       try {
         // Import the Emscripten glue script (sets self.PhysEngine)
         importScripts(data.wasmPath);
-        const candidates = [
-          workerScope.PhysEngine,
-          workerScope.Module,
-          workerScope.createModule,
-          workerScope.MomentumCore,
-        ];
-        const engineFactory =
-          candidates.find((factory) => typeof factory === 'function') ||
-          candidates
-            .map((candidate) => candidate?.default)
-            .find((factory) => typeof factory === 'function') ||
-          null;
+        const resolveFactory = async () => {
+          const candidates = [
+            workerScope.PhysEngine,
+            workerScope.Module,
+            workerScope.createModule,
+            workerScope.MomentumCore,
+          ];
+          const globalFactory =
+            candidates.find((factory: unknown) => typeof factory === 'function') ||
+            candidates
+              .map((candidate: any) => candidate?.default)
+              .find((factory: unknown) => typeof factory === 'function') ||
+            null;
 
-        if (!engineFactory) {
-          throw new Error('No callable Emscripten factory found on worker global scope (expected one of PhysEngine/Module/createModule)');
-        }
+          if (globalFactory) {
+            return globalFactory;
+          }
+
+          const response = await fetch(data.wasmPath, { cache: 'no-store' });
+          const source = await response.text();
+          const evaluatedFactory = new Function(
+            `${source}\nreturn (typeof PhysEngine === "function" && PhysEngine) || (typeof Module === "function" && Module) || (typeof createModule === "function" && createModule) || (typeof MomentumCore === "function" && MomentumCore) || null;`
+          )();
+
+          if (typeof evaluatedFactory === 'function') {
+            return evaluatedFactory;
+          }
+
+          throw new Error(
+            `No callable Emscripten factory found. HTTP ${response.status} content-type=${response.headers.get('content-type') || 'unknown'}`
+          );
+        };
+
+        const engineFactory = await resolveFactory();
 
         Module = await engineFactory({
           locateFile: (path: string) =>
