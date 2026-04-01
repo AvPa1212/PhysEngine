@@ -100,7 +100,7 @@ TEST(MatrixTest, ScalarMultiplicationByZeroYieldsZero) {
     }
 }
 
-TEST(MatrixTest, ScalarMultiplicationByTwoDoublesValues) {
+TEST(MatrixTest, ScalarMultiplicationByRealTwoScalesAllEntries) {
     Matrix I = Matrix::identity();
     Matrix result = I * Complex{2.0, 0.0};
     for (int i = 0; i < Config::QUANTUM_DIM; ++i) {

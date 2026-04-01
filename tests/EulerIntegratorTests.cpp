@@ -59,7 +59,7 @@ TEST(EulerIntegratorTest, NonZeroVelocityChangesPositionInVelocityDirection) {
 
 // ---- Deadline decrements by exactly TIME_STEP ----
 
-TEST(EulerIntegratorTest, DeadlineDecrementsbyTimeStep) {
+TEST(EulerIntegratorTest, DeadlineDecrementsByTimeStep) {
     Task task = makeEulerTask();
     const double initialDeadline = task.deadlineTime;
 
