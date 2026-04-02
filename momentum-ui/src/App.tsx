@@ -131,7 +131,11 @@ function Workspace() {
   const [dampingCoefficient, setDampingCoefficient] = useState(0.1);
   const [energyHistory, setEnergyHistory] = useState<number[]>([]);
   const [entropyHistory, setEntropyHistory] = useState<number[]>([]);
+  const [collapseHistory, setCollapseHistory] = useState<number[]>([]);
+  const [stressHistory, setStressHistory] = useState<number[]>([]);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [forceVector, setForceVector] = useState({ x: 2, y: 0.5, z: 0.2 });
+  const [massOverride, setMassOverride] = useState(1);
 
   const activeTaskIdsRef = useRef<Set<string>>(new Set());
   const taskMassRef = useRef<Record<string, number>>({});
@@ -144,6 +148,7 @@ function Workspace() {
 
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? tasks[0] ?? null;
   const visibleTaskStates = isPaused && pausedTaskStates ? pausedTaskStates : taskStates;
+  const selectedTaskState = selectedTask ? visibleTaskStates[selectedTask.id] : null;
 
   const activeTasks = useMemo(() => tasks.filter(t => !t.completed), [tasks]);
   const completedTasks = useMemo(() => tasks.filter(t => t.completed), [tasks]);
@@ -160,6 +165,14 @@ function Workspace() {
     () => Object.values(visibleTaskStates).reduce((sum, state) => sum + (state.entropy || 0), 0),
     [visibleTaskStates]
   );
+  const averageCollapse = useMemo(() => {
+    if (activeTasks.length === 0) return 0;
+    return activeTasks.reduce((sum, task) => sum + (visibleTaskStates[task.id]?.collapseProbability ?? 0), 0) / activeTasks.length;
+  }, [activeTasks, visibleTaskStates]);
+  const activeEnergyDensity = useMemo(() => {
+    const canvasArea = Math.max(1, activeTasks.length * 18);
+    return totalEnergy / canvasArea;
+  }, [activeTasks.length, totalEnergy]);
   const stdDevEnergy = useMemo(() => {
     if (activeTasks.length < 2) return 0;
     const energies = activeTasks.map(t => t.difficulty * 8.6);
@@ -171,7 +184,9 @@ function Workspace() {
   useEffect(() => {
     setEnergyHistory(prev => [...prev.slice(-59), totalEnergy]);
     setEntropyHistory(prev => [...prev.slice(-59), totalEntropy]);
-  }, [totalEnergy, totalEntropy]);
+    setCollapseHistory(prev => [...prev.slice(-59), averageCollapse * 100]);
+    setStressHistory(prev => [...prev.slice(-59), activeEnergyDensity]);
+  }, [totalEnergy, totalEntropy, averageCollapse, activeEnergyDensity]);
 
   useEffect(() => {
     try {
@@ -280,6 +295,11 @@ function Workspace() {
     }
   }, [selectedTaskId, tasks]);
 
+  useEffect(() => {
+    if (!selectedTask) return;
+    setMassOverride(selectedTask.difficulty);
+  }, [selectedTask?.id]);
+
   if (error) return <div className="loader error-state">⚠ ENGINE FAULT: {error}</div>;
   if (!isReady) return (
     <div className="loader">
@@ -315,6 +335,50 @@ function Workspace() {
     setIsQuickAddOpen(false);
     navigate('/simulation');
   };
+
+  const focusSelectedTask = useCallback(() => {
+    if (!selectedTask) return;
+    navigate('/simulation');
+    setSelectedTaskId(selectedTask.id);
+    applyForce(selectedTask.id, forceVector.x, forceVector.y, forceVector.z);
+  }, [applyForce, forceVector.x, forceVector.y, forceVector.z, navigate, selectedTask]);
+
+  const pulseSelectedTask = useCallback(() => {
+    if (!selectedTask) return;
+    applyForce(selectedTask.id, forceVector.x * 1.8, forceVector.y * 1.4, forceVector.z * 1.2);
+    setNotifications((prev) => [...prev.slice(-4), {
+      id: `pulse_${selectedTask.id}_${Date.now()}`,
+      message: `⚛ Pulse injected into ${selectedTask.title}`,
+      type: 'success',
+    }]);
+  }, [applyForce, forceVector.x, forceVector.y, forceVector.z, selectedTask]);
+
+  const stabilizeSelectedTask = useCallback(() => {
+    if (!selectedTask) return;
+    const state = selectedTaskState;
+    const fx = -(state?.stressX ?? 0) * 0.8;
+    const fy = -(state?.stressY ?? 0) * 0.8;
+    const fz = -(state?.stressZ ?? 0) * 0.8;
+    applyForce(selectedTask.id, fx, fy, fz);
+    setMass(selectedTask.id, Math.max(0.5, massOverride));
+  }, [applyForce, massOverride, selectedTask, selectedTaskState, setMass]);
+
+  const hardCollapseSelectedTask = useCallback(() => {
+    if (!selectedTask) return;
+    collapse(selectedTask.id);
+    setNotifications((prev) => [...prev.slice(-4), {
+      id: `collapse_${selectedTask.id}_${Date.now()}`,
+      message: `⚠ Forced collapse on ${selectedTask.title}`,
+      type: 'critical',
+    }]);
+  }, [collapse, selectedTask]);
+
+  const randomizeForceVector = useCallback(() => {
+    const nextX = (Math.random() * 4 - 2).toFixed(2);
+    const nextY = (Math.random() * 3 - 1.5).toFixed(2);
+    const nextZ = (Math.random() * 2 - 1).toFixed(2);
+    setForceVector({ x: Number(nextX), y: Number(nextY), z: Number(nextZ) });
+  }, []);
 
   const toggleComplete = (id: string) => {
     setTasks((prev) => prev.map((t) => {
@@ -546,6 +610,24 @@ function Workspace() {
                 <div className="canvas-overlay-label bottom-left">
                   {Object.entries(activeModels).filter(([,v]) => v).map(([k]) => k).join(' · ')}
                 </div>
+                <div className="canvas-telemetry">
+                  <div className="telemetry-pill">
+                    <span>Selected</span>
+                    <strong>{selectedTask ? selectedTask.title.slice(0, 18) : 'None'}</strong>
+                  </div>
+                  <div className="telemetry-pill">
+                    <span>Collapse</span>
+                    <strong>{(averageCollapse * 100).toFixed(1)}%</strong>
+                  </div>
+                  <div className="telemetry-pill">
+                    <span>Energy Density</span>
+                    <strong>{activeEnergyDensity.toFixed(2)}</strong>
+                  </div>
+                  <div className="telemetry-pill">
+                    <span>Telemetry</span>
+                    <strong>{activeTasks.length} tasks</strong>
+                  </div>
+                </div>
                 <svg className="canvas-svg" viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
                   {/* Grid */}
                   <defs>
@@ -641,10 +723,10 @@ function Workspace() {
                   <div className="canvas-controls">
                     <span className="ctrl-label">{selectedTask.title.slice(0, 12)}</span>
                     <div className="ctrl-divider"/>
-                    <button type="button" className="ctrl-btn play" onClick={() => collapse(selectedTask.id)} title="Collapse quantum state">⊗ Collapse</button>
-                    <button type="button" className="ctrl-btn" onClick={() => applyForce(selectedTask.id, 2.0, 0.5, 0.2)} title="Apply positive force">→ Push</button>
-                    <button type="button" className="ctrl-btn" onClick={() => applyForce(selectedTask.id, -1.5, -0.5, 0)} title="Apply negative force">← Pull</button>
-                    <button type="button" className="ctrl-btn" onClick={() => applyForce(selectedTask.id, 0, 2.0, 0.5)} title="Apply upward force">↑ Lift</button>
+                    <button type="button" className="ctrl-btn play" onClick={hardCollapseSelectedTask} title="Collapse quantum state">⊗ Collapse</button>
+                    <button type="button" className="ctrl-btn" onClick={focusSelectedTask} title="Inject force vector">→ Focus</button>
+                    <button type="button" className="ctrl-btn" onClick={pulseSelectedTask} title="Apply kinetic pulse">⚡ Pulse</button>
+                    <button type="button" className="ctrl-btn" onClick={stabilizeSelectedTask} title="Stabilize selected task">◌ Stabilize</button>
                     <button type="button" className="ctrl-btn accent" onClick={() => toggleComplete(selectedTask.id)} title="Mark complete">✓ Done</button>
                   </div>
                 )}
@@ -688,6 +770,66 @@ function Workspace() {
                       <path d={sparklinePath(entropyHistory, 200, 36) + ' L200,36 L0,36 Z'} fill="var(--accent2)" opacity="0.08"/>
                     </svg>
                   </div>
+                  <div className="sparkline-wrap">
+                    <div className="sparkline-label">Collapse Pressure</div>
+                    <svg width="100%" height="36" viewBox={`0 0 200 36`} preserveAspectRatio="none">
+                      <path d={sparklinePath(collapseHistory, 200, 36)} fill="none" stroke="var(--coral)" strokeWidth="1.5" opacity="0.7"/>
+                      <path d={sparklinePath(collapseHistory, 200, 36) + ' L200,36 L0,36 Z'} fill="var(--coral)" opacity="0.08"/>
+                    </svg>
+                  </div>
+                  <div className="sparkline-wrap">
+                    <div className="sparkline-label">Stress Density</div>
+                    <svg width="100%" height="36" viewBox={`0 0 200 36`} preserveAspectRatio="none">
+                      <path d={sparklinePath(stressHistory, 200, 36)} fill="none" stroke="var(--green)" strokeWidth="1.5" opacity="0.7"/>
+                      <path d={sparklinePath(stressHistory, 200, 36) + ' L200,36 L0,36 Z'} fill="var(--green)" opacity="0.08"/>
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="panel-block control-surface">
+                  <div className="panel-title">task control surface</div>
+                  {selectedTask ? (
+                    <>
+                      <div className="control-surface-head">
+                        <div>
+                          <div className="surface-label">Selected Task</div>
+                          <div className="surface-title">{selectedTask.title}</div>
+                        </div>
+                        <button type="button" className="btn-sm accent-btn" onClick={randomizeForceVector}>Randomize Vector</button>
+                      </div>
+                      <div className="control-grid">
+                        <label className="control-row">
+                          <span>Mass Override <strong>{massOverride.toFixed(1)}</strong></span>
+                          <input type="range" min={0.5} max={12} step={0.1} value={massOverride} onChange={(e) => setMassOverride(Number(e.target.value))} />
+                        </label>
+                        <label className="control-row">
+                          <span>Force X <strong>{forceVector.x.toFixed(2)}</strong></span>
+                          <input type="range" min={-4} max={4} step={0.05} value={forceVector.x} onChange={(e) => setForceVector((prev) => ({ ...prev, x: Number(e.target.value) }))} />
+                        </label>
+                        <label className="control-row">
+                          <span>Force Y <strong>{forceVector.y.toFixed(2)}</strong></span>
+                          <input type="range" min={-4} max={4} step={0.05} value={forceVector.y} onChange={(e) => setForceVector((prev) => ({ ...prev, y: Number(e.target.value) }))} />
+                        </label>
+                        <label className="control-row">
+                          <span>Force Z <strong>{forceVector.z.toFixed(2)}</strong></span>
+                          <input type="range" min={-3} max={3} step={0.05} value={forceVector.z} onChange={(e) => setForceVector((prev) => ({ ...prev, z: Number(e.target.value) }))} />
+                        </label>
+                      </div>
+                      <div className="surface-stats">
+                        <div className="surface-stat"><span>Entropy</span><strong>{(selectedTaskState?.entropy ?? 0).toFixed(3)}</strong></div>
+                        <div className="surface-stat"><span>Collapse</span><strong>{((selectedTaskState?.collapseProbability ?? 0) * 100).toFixed(1)}%</strong></div>
+                        <div className="surface-stat"><span>Steps</span><strong>{selectedTaskState?.stepCount ?? 0}</strong></div>
+                      </div>
+                      <div className="surface-actions">
+                        <button type="button" className="btn-sm accent" onClick={focusSelectedTask}>Apply Vector</button>
+                        <button type="button" className="btn-sm" onClick={pulseSelectedTask}>Pulse</button>
+                        <button type="button" className="btn-sm" onClick={stabilizeSelectedTask}>Stabilize</button>
+                        <button type="button" className="btn-sm danger" onClick={hardCollapseSelectedTask}>Collapse</button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="empty">Select a task to expose the engine controls.</p>
+                  )}
                 </div>
 
                 <div className="panel-block">
@@ -947,3 +1089,95 @@ function Workspace() {
               </div>
             </div>
           }/>
+
+          {/* ── ANALYTICS PAGE ── */}
+          <Route path="/analytics" element={
+            <div className="analytics-page">
+              <div className="analytics-grid">
+                <div className="panel-card">
+                  <h2>System Heat</h2>
+                  <p className="big-stat" style={{ color: heatPct > 80 ? 'var(--coral)' : 'var(--amber)' }}>{heatDisplay} K</p>
+                  <div className="bar"><div className="fill" style={{ width: `${heatPct}%`, background: heatPct > 80 ? 'var(--coral)' : 'var(--amber)' }}/></div>
+                  <p className="stat-sub">{heatPct > 80 ? '🔥 Approaching burnout' : '✓ Nominal operating range'}</p>
+                </div>
+                <div className="panel-card">
+                  <h2>Average Difficulty</h2>
+                  <p className="big-stat accent">{avgDifficulty.toFixed(2)}</p>
+                  <p className="stat-sub">Std Dev: {stdDevEnergy.toFixed(2)} eV</p>
+                </div>
+                <div className="panel-card">
+                  <h2>Completion Rate</h2>
+                  <p className="big-stat green">{tasks.length ? ((completedTasks.length / tasks.length) * 100).toFixed(0) : 0}%</p>
+                  <div className="bar"><div className="fill green-fill" style={{ width: `${tasks.length ? (completedTasks.length / tasks.length) * 100 : 0}%` }}/></div>
+                  <p className="stat-sub">{completedTasks.length} of {tasks.length} tasks done</p>
+                </div>
+                <div className="panel-card">
+                  <h2>Total Entropy</h2>
+                  <p className="big-stat purple">{totalEntropy.toFixed(2)}</p>
+                  <p className="stat-sub">Avg per task: {entropyScore.toFixed(3)}</p>
+                </div>
+                <EnergyAnalytics meanEnergy={totalEnergy / Math.max(activeTasks.length, 1)} stdDevEnergy={stdDevEnergy} />
+                <div className="panel-card">
+                  <h2>Group Balance</h2>
+                  <ul className="stat-list">
+                    {groupedTasks.map(({ group, tasks: grouped }) => {
+                      const active = grouped.filter(t => !t.completed);
+                      const done = grouped.filter(t => t.completed);
+                      return (
+                        <li key={group.id}>
+                          <span className="legend-dot" style={{ background: group.color }}/>
+                          <span>{group.name}</span>
+                          <span className="stat-count">{active.length} active</span>
+                          <span className="stat-done">{done.length} done</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+                <div className="panel-card span-2">
+                  <h2>Energy Timeline</h2>
+                  <svg width="100%" height="120" viewBox="0 0 600 120" preserveAspectRatio="none">
+                    <defs>
+                      <linearGradient id="energy-grad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.4"/>
+                        <stop offset="100%" stopColor="var(--accent)" stopOpacity="0"/>
+                      </linearGradient>
+                      <linearGradient id="entropy-grad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--accent2)" stopOpacity="0.4"/>
+                        <stop offset="100%" stopColor="var(--accent2)" stopOpacity="0"/>
+                      </linearGradient>
+                    </defs>
+                    <path d={sparklinePath(energyHistory, 600, 110) + ' L600,120 L0,120 Z'} fill="url(#energy-grad)"/>
+                    <path d={sparklinePath(energyHistory, 600, 110)} fill="none" stroke="var(--accent)" strokeWidth="2"/>
+                    <path d={sparklinePath(entropyHistory, 600, 110) + ' L600,120 L0,120 Z'} fill="url(#entropy-grad)"/>
+                    <path d={sparklinePath(entropyHistory, 600, 110)} fill="none" stroke="var(--accent2)" strokeWidth="2" strokeDasharray="4 2"/>
+                  </svg>
+                  <div className="chart-legend">
+                    <span><span className="legend-dot" style={{ background: 'var(--accent)' }}/> Energy</span>
+                    <span><span className="legend-dot" style={{ background: 'var(--accent2)' }}/> Entropy</span>
+                  </div>
+                </div>
+                <div className="panel-card">
+                  <h2>Physics Models</h2>
+                  <div className="model-status-list">
+                    {Object.entries(activeModels).map(([model, on]) => (
+                      <div key={model} className="model-status-row">
+                        <span className={`model-status-dot ${on ? 'on' : 'off'}`}/>
+                        <span className="model-status-name">{model}</span>
+                        <span className="model-status-val">{on ? 'ACTIVE' : 'IDLE'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          }/>
+
+          <Route path="*" element={<Navigate to="/simulation" replace />} />
+        </Routes>
+      </div>
+    </div>
+  );
+}
+
+export default App;
