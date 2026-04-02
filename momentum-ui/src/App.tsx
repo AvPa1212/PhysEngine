@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   BrowserRouter,
   Navigate,
@@ -25,6 +25,7 @@ type Task = {
   difficulty: number;
   groupId: string;
   createdAt: number;
+  completed: boolean;
 };
 
 type TaskGroup = {
@@ -36,7 +37,7 @@ type TaskGroup = {
 type Notification = {
   id: string;
   message: string;
-  type: 'warning' | 'critical';
+  type: 'warning' | 'critical' | 'success';
 };
 
 type WorkerTaskState = {
@@ -56,11 +57,11 @@ const DEFAULT_GROUP: TaskGroup = {
   color: '#4f8ef7',
 };
 
-const NAV_ITEMS: Array<{ key: PageKey; label: string; path: string }> = [
-  { key: 'simulation', label: 'Simulation', path: '/simulation' },
-  { key: 'tasks', label: 'Tasks', path: '/tasks' },
-  { key: 'groups', label: 'Groups', path: '/groups' },
-  { key: 'analytics', label: 'Analytics', path: '/analytics' },
+const NAV_ITEMS: Array<{ key: PageKey; label: string; path: string; icon: string }> = [
+  { key: 'simulation', label: 'Simulation', path: '/simulation', icon: '⚛' },
+  { key: 'tasks', label: 'Tasks', path: '/tasks', icon: '◈' },
+  { key: 'groups', label: 'Groups', path: '/groups', icon: '⬡' },
+  { key: 'analytics', label: 'Analytics', path: '/analytics', icon: '◉' },
 ];
 
 function toRange(value: number, min: number, max: number) {
@@ -73,6 +74,23 @@ function App() {
       <Workspace />
     </BrowserRouter>
   );
+}
+
+// Animated particle trail hook for canvas
+function useAnimatedParticles(tasks: Task[], taskStates: Record<string, WorkerTaskState>, groupMap: Record<string, TaskGroup>) {
+  const [tick, setTick] = useState(0);
+  const rafRef = useRef<number>(0);
+  useEffect(() => {
+    let frame = 0;
+    const animate = () => {
+      frame++;
+      if (frame % 2 === 0) setTick(t => t + 1);
+      rafRef.current = requestAnimationFrame(animate);
+    };
+    rafRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, []);
+  return tick;
 }
 
 function Workspace() {
@@ -111,35 +129,49 @@ function Workspace() {
   });
   const [isDampingEnabled, setIsDampingEnabled] = useState(false);
   const [dampingCoefficient, setDampingCoefficient] = useState(0.1);
+  const [energyHistory, setEnergyHistory] = useState<number[]>([]);
+  const [entropyHistory, setEntropyHistory] = useState<number[]>([]);
+  const [showCompleted, setShowCompleted] = useState(false);
 
   const activeTaskIdsRef = useRef<Set<string>>(new Set());
   const taskMassRef = useRef<Record<string, number>>({});
+  const tick = useAnimatedParticles(tasks, taskStates, {});
 
   const groupMap = useMemo(
     () => Object.fromEntries(groups.map((g) => [g.id, g])),
     [groups]
   );
 
-  const selectedTask =
-    tasks.find((task) => task.id === selectedTaskId) ?? tasks[0] ?? null;
-
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? tasks[0] ?? null;
   const visibleTaskStates = isPaused && pausedTaskStates ? pausedTaskStates : taskStates;
 
+  const activeTasks = useMemo(() => tasks.filter(t => !t.completed), [tasks]);
+  const completedTasks = useMemo(() => tasks.filter(t => t.completed), [tasks]);
+
   const totalEnergy = useMemo(
-    () => tasks.reduce((sum, task) => sum + task.difficulty * 8.6, 0),
-    [tasks]
+    () => activeTasks.reduce((sum, task) => sum + task.difficulty * 8.6, 0),
+    [activeTasks]
   );
   const avgDifficulty = useMemo(
-    () =>
-      tasks.length
-        ? tasks.reduce((sum, task) => sum + task.difficulty, 0) / tasks.length
-        : 0,
-    [tasks]
+    () => activeTasks.length ? activeTasks.reduce((sum, task) => sum + task.difficulty, 0) / activeTasks.length : 0,
+    [activeTasks]
   );
   const totalEntropy = useMemo(
     () => Object.values(visibleTaskStates).reduce((sum, state) => sum + (state.entropy || 0), 0),
     [visibleTaskStates]
   );
+  const stdDevEnergy = useMemo(() => {
+    if (activeTasks.length < 2) return 0;
+    const energies = activeTasks.map(t => t.difficulty * 8.6);
+    const mean = energies.reduce((a, b) => a + b, 0) / energies.length;
+    return Math.sqrt(energies.reduce((sum, e) => sum + (e - mean) ** 2, 0) / energies.length);
+  }, [activeTasks]);
+
+  // Track energy/entropy history for sparklines
+  useEffect(() => {
+    setEnergyHistory(prev => [...prev.slice(-59), totalEnergy]);
+    setEntropyHistory(prev => [...prev.slice(-59), totalEntropy]);
+  }, [totalEnergy, totalEntropy]);
 
   useEffect(() => {
     try {
@@ -156,7 +188,6 @@ function Workspace() {
           setGroups(withDefault);
         }
       }
-
       const savedTasks = localStorage.getItem('momentum_tasks');
       if (savedTasks) {
         const parsed = JSON.parse(savedTasks);
@@ -169,81 +200,52 @@ function Workspace() {
               difficulty: toRange(Number(task.difficulty) || 1, 1, 10),
               groupId: task.groupId ? String(task.groupId) : DEFAULT_GROUP_ID,
               createdAt: Number(task.createdAt) || Date.now(),
+              completed: Boolean(task.completed),
             })) as Task[];
           setTasks(hydratedTasks);
-          if (hydratedTasks[0]) {
-            setSelectedTaskId(hydratedTasks[0].id);
-          }
+          if (hydratedTasks[0]) setSelectedTaskId(hydratedTasks[0].id);
         }
       }
-    } catch {
-      // localStorage may be unavailable
-    }
+    } catch { /* localStorage may be unavailable */ }
   }, []);
 
   useEffect(() => {
     if (!eventBridge) return;
-
-    const unsubEntropy = eventBridge.subscribe(
-      'EntropyThresholdReached',
-      (evt: { taskId: string; entropy: number }) => {
-        setNotifications((prev) => [
-          ...prev.slice(-4),
-          {
-            id: `entropy_${evt.taskId}_${Date.now()}`,
-            message: `\u26A1 Entropy threshold reached (${Number(evt.entropy).toFixed(2)})`,
-            type: 'warning',
-          },
-        ]);
-      }
-    );
-
-    const unsubOverheat = eventBridge.subscribe('SystemOverheat', () => {
-      setNotifications((prev) => [
-        ...prev.slice(-4),
-        {
-          id: `overheat_${Date.now()}`,
-          message: '\uD83D\uDD25 System Overheat! Too many active tasks.',
-          type: 'critical',
-        },
-      ]);
+    const unsubEntropy = eventBridge.subscribe('EntropyThresholdReached', (evt: { taskId: string; entropy: number }) => {
+      setNotifications((prev) => [...prev.slice(-4), {
+        id: `entropy_${evt.taskId}_${Date.now()}`,
+        message: `⚡ Entropy threshold reached (${Number(evt.entropy).toFixed(2)})`,
+        type: 'warning',
+      }]);
     });
-
-    return () => {
-      unsubEntropy();
-      unsubOverheat();
-    };
+    const unsubOverheat = eventBridge.subscribe('SystemOverheat', () => {
+      setNotifications((prev) => [...prev.slice(-4), {
+        id: `overheat_${Date.now()}`,
+        message: '🔥 System Overheat! Too many active tasks.',
+        type: 'critical',
+      }]);
+    });
+    return () => { unsubEntropy(); unsubOverheat(); };
   }, [eventBridge]);
 
   useEffect(() => {
     if (notifications.length === 0) return;
-    const timer = setTimeout(() => {
-      setNotifications((prev) => prev.slice(1));
-    }, 3000);
+    const timer = setTimeout(() => setNotifications((prev) => prev.slice(1)), 3500);
     return () => clearTimeout(timer);
   }, [notifications]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('momentum_tasks', JSON.stringify(tasks));
-    } catch {
-      // localStorage may be unavailable
-    }
+    try { localStorage.setItem('momentum_tasks', JSON.stringify(tasks)); } catch { }
   }, [tasks]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('momentum_groups', JSON.stringify(groups));
-    } catch {
-      // localStorage may be unavailable
-    }
+    try { localStorage.setItem('momentum_groups', JSON.stringify(groups)); } catch { }
   }, [groups]);
 
   useEffect(() => {
     if (!isReady) return;
     const activeIds = activeTaskIdsRef.current;
     const desiredIds = new Set(tasks.map((task) => task.id));
-
     tasks.forEach((task) => {
       if (!activeIds.has(task.id)) {
         createTask(task.id, { mass: task.difficulty });
@@ -254,7 +256,6 @@ function Workspace() {
         taskMassRef.current[task.id] = task.difficulty;
       }
     });
-
     Array.from(activeIds).forEach((taskId) => {
       if (!desiredIds.has(taskId)) {
         destroyTask(taskId);
@@ -267,54 +268,38 @@ function Workspace() {
   useEffect(() => {
     const activeIds = activeTaskIdsRef.current;
     return () => {
-      Array.from(activeIds).forEach((taskId) => {
-        destroyTask(taskId);
-      });
+      Array.from(activeIds).forEach((taskId) => destroyTask(taskId));
       activeIds.clear();
     };
   }, [destroyTask]);
 
   useEffect(() => {
-    if (!selectedTaskId && tasks[0]) {
-      setSelectedTaskId(tasks[0].id);
-      return;
-    }
+    if (!selectedTaskId && tasks[0]) { setSelectedTaskId(tasks[0].id); return; }
     if (selectedTaskId && !tasks.some((task) => task.id === selectedTaskId)) {
       setSelectedTaskId(tasks[0]?.id ?? null);
     }
   }, [selectedTaskId, tasks]);
 
-  if (error) {
-    return <div className="loader error-state">\u26A0 ENGINE FAULT: {error}</div>;
-  }
-
-  if (!isReady) {
-    return <div className="loader">LOADING QUANTUM CORE...</div>;
-  }
+  if (error) return <div className="loader error-state">⚠ ENGINE FAULT: {error}</div>;
+  if (!isReady) return (
+    <div className="loader">
+      <div className="loader-ring"></div>
+      <div className="loader-text">INITIALIZING QUANTUM CORE</div>
+    </div>
+  );
 
   const systemHeat = tasks.length * 12.5;
   const heatDisplay = systemHeat.toFixed(1);
   const heatPct = Math.min((systemHeat / BURNOUT_THRESHOLD) * 100, 100);
   const isBurningOut = systemHeat > BURNOUT_THRESHOLD;
+  const entropyScore = activeTasks.length ? totalEntropy / activeTasks.length : 0;
 
   const createTaskFromInput = () => {
     const title = newTaskTitle.trim();
     if (!title) return false;
-
     const id = `${Date.now()}`;
     const groupId = groupMap[newTaskGroupId] ? newTaskGroupId : DEFAULT_GROUP_ID;
-
-    setTasks((prev) => [
-      ...prev,
-      {
-        id,
-        title,
-        difficulty: toRange(newTaskDifficulty, 1, 10),
-        groupId,
-        createdAt: Date.now(),
-      },
-    ]);
-
+    setTasks((prev) => [...prev, { id, title, difficulty: toRange(newTaskDifficulty, 1, 10), groupId, createdAt: Date.now(), completed: false }]);
     setNewTaskTitle('');
     setNewTaskDifficulty(5);
     setNewTaskGroupId(groupId);
@@ -322,10 +307,7 @@ function Workspace() {
     return true;
   };
 
-  const addTask = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    createTaskFromInput();
-  };
+  const addTask = (e: React.FormEvent<HTMLFormElement>) => { e.preventDefault(); createTaskFromInput(); };
 
   const quickAddTask = () => {
     const created = createTaskFromInput();
@@ -334,96 +316,67 @@ function Workspace() {
     navigate('/simulation');
   };
 
-  const openQuickAdd = () => {
-    setIsQuickAddOpen(true);
-    navigate('/simulation');
+  const toggleComplete = (id: string) => {
+    setTasks((prev) => prev.map((t) => {
+      if (t.id !== id) return t;
+      const nowComplete = !t.completed;
+      if (nowComplete) {
+        setNotifications(n => [...n.slice(-4), { id: `done_${id}_${Date.now()}`, message: `✓ "${t.title}" completed`, type: 'success' }]);
+        collapse(id);
+      }
+      return { ...t, completed: nowComplete };
+    }));
   };
 
   const togglePause = () => {
     setIsPaused((prev) => {
-      if (prev) {
-        setPausedTaskStates(null);
-        return false;
-      }
+      if (prev) { setPausedTaskStates(null); return false; }
       setPausedTaskStates(taskStates as Record<string, WorkerTaskState>);
       return true;
     });
   };
 
   const patchTask = (id: string, patch: Partial<Omit<Task, 'id' | 'createdAt'>>) => {
-    setTasks((prev) =>
-      prev.map((task) => {
-        if (task.id !== id) {
-          return task;
-        }
-        return {
-          ...task,
-          ...patch,
-          difficulty:
-            patch.difficulty != null
-              ? toRange(Number(patch.difficulty), 1, 10)
-              : task.difficulty,
-        };
-      })
-    );
+    setTasks((prev) => prev.map((task) => {
+      if (task.id !== id) return task;
+      return { ...task, ...patch, difficulty: patch.difficulty != null ? toRange(Number(patch.difficulty), 1, 10) : task.difficulty };
+    }));
   };
 
-  const removeTask = (id: string) => {
-    setTasks((prev) => prev.filter((task) => task.id !== id));
-  };
+  const removeTask = (id: string) => setTasks((prev) => prev.filter((task) => task.id !== id));
 
   const addGroup = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const name = newGroupName.trim();
     if (!name) return;
-    const group: TaskGroup = {
-      id: `grp-${Date.now()}`,
-      name,
-      color: newGroupColor,
-    };
-    setGroups((prev) => [...prev, group]);
+    setGroups((prev) => [...prev, { id: `grp-${Date.now()}`, name, color: newGroupColor }]);
     setNewGroupName('');
   };
 
   const deleteGroup = (groupId: string) => {
     if (groupId === DEFAULT_GROUP_ID) return;
     setGroups((prev) => prev.filter((group) => group.id !== groupId));
-    setTasks((prev) =>
-      prev.map((task) =>
-        task.groupId === groupId ? { ...task, groupId: DEFAULT_GROUP_ID } : task
-      )
-    );
-    if (newTaskGroupId === groupId) {
-      setNewTaskGroupId(DEFAULT_GROUP_ID);
-    }
+    setTasks((prev) => prev.map((task) => task.groupId === groupId ? { ...task, groupId: DEFAULT_GROUP_ID } : task));
+    if (newTaskGroupId === groupId) setNewTaskGroupId(DEFAULT_GROUP_ID);
   };
 
   const moveTask = (taskId: string, targetGroupId: string, targetTaskId?: string) => {
     setTasks((prev) => {
       const dragged = prev.find((task) => task.id === taskId);
       if (!dragged) return prev;
-
       const withoutDragged = prev.filter((task) => task.id !== taskId);
       const movedTask: Task = { ...dragged, groupId: targetGroupId };
-
       if (!targetTaskId) {
         let insertAt = withoutDragged.length;
-        for (let i = withoutDragged.length - 1; i >= 0; i -= 1) {
-          if (withoutDragged[i].groupId === targetGroupId) {
-            insertAt = i + 1;
-            break;
-          }
+        for (let i = withoutDragged.length - 1; i >= 0; i--) {
+          if (withoutDragged[i].groupId === targetGroupId) { insertAt = i + 1; break; }
         }
         withoutDragged.splice(insertAt, 0, movedTask);
         return withoutDragged;
       }
-
       const targetIndex = withoutDragged.findIndex((task) => task.id === targetTaskId);
-      if (targetIndex === -1) {
-        withoutDragged.push(movedTask);
-      } else {
-        withoutDragged.splice(targetIndex, 0, movedTask);
-      }
+      if (targetIndex === -1) withoutDragged.push(movedTask);
+      else withoutDragged.splice(targetIndex, 0, movedTask);
       return withoutDragged;
     });
   };
@@ -433,56 +386,55 @@ function Workspace() {
     tasks: tasks.filter((task) => task.groupId === group.id),
   }));
 
-  const entropyScore = tasks.length ? totalEntropy / tasks.length : 0;
+  // Sparkline path generator
+  const sparklinePath = (data: number[], w: number, h: number) => {
+    if (data.length < 2) return '';
+    const max = Math.max(...data, 1);
+    const min = Math.min(...data, 0);
+    const range = max - min || 1;
+    return data.map((v, i) => {
+      const x = (i / (data.length - 1)) * w;
+      const y = h - ((v - min) / range) * h;
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+  };
 
   return (
     <div className={`app${isBurningOut ? ' burnout-shake' : ''}`}>
+      {/* TOPBAR */}
       <div className="topbar">
         <div className="logo">
           <div className="logo-dot"></div>
           MOMENTUM
         </div>
-        <div className="topbar-tabs" role="tablist" aria-label="Workspace pages">
+        <div className="topbar-tabs" role="tablist">
           {NAV_ITEMS.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) => `tab ${isActive ? 'active' : ''}`}
-            >
-              {item.label}
+            <NavLink key={item.path} to={item.path} className={({ isActive }) => `tab ${isActive ? 'active' : ''}`}>
+              <span className="tab-icon">{item.icon}</span>{item.label}
             </NavLink>
           ))}
         </div>
         <div className="topbar-right">
-          <button className="btn-sm" type="button" onClick={openQuickAdd}>
-            Add Task
+          <button className="btn-sm accent" type="button" onClick={() => { setIsQuickAddOpen(true); navigate('/simulation'); }}>
+            + Add Task
           </button>
           <button className="btn-sm" type="button" onClick={togglePause}>
-            {isPaused ? 'Resume' : 'Pause'}
+            {isPaused ? '▶ Resume' : '⏸ Pause'}
           </button>
           <div className="sim-badge">
             <div className="sim-dot"></div>
-            LIVE
+            {isPaused ? 'PAUSED' : 'LIVE'}
           </div>
-          <div className="sim-badge" aria-label="task count">
-            Tasks: {tasks.length}
-          </div>
-          <button
-            className="btn-sm"
-            type="button"
-            onClick={() => localStorage.setItem('momentum_export', JSON.stringify({ tasks, groups }))}
-          >
-            Export State
-          </button>
+          <div className="sim-badge blue">⚡ {activeTasks.length} active</div>
+          {completedTasks.length > 0 && <div className="sim-badge green">✓ {completedTasks.length} done</div>}
         </div>
       </div>
 
+      {/* NOTIFICATIONS */}
       {notifications.length > 0 && (
         <div className="notifications">
           {notifications.map((n) => (
-            <div key={n.id} className={`notification notification-${n.type}`}>
-              {n.message}
-            </div>
+            <div key={n.id} className={`notification notification-${n.type}`}>{n.message}</div>
           ))}
         </div>
       )}
@@ -491,495 +443,428 @@ function Workspace() {
         <Routes>
           <Route path="/" element={<Navigate to="/simulation" replace />} />
 
-          <Route
-            path="/simulation"
-            element={
-              <div className="page-grid">
-                <aside className="sidebar-left">
-                  <div className="sidebar-section">
-                    <div className="sidebar-label">Active Tasks</div>
-                    <button
-                      type="button"
-                      className="add-btn"
-                      onClick={() => setIsQuickAddOpen((prev) => !prev)}
-                    >
-                      + Add Task
-                    </button>
-                    {isQuickAddOpen && (
-                      <div className="quick-add-panel">
-                        <input
-                          className="mini-input"
-                          type="text"
-                          value={newTaskTitle}
-                          onChange={(e) => setNewTaskTitle(e.target.value)}
-                          placeholder="Task title"
-                          aria-label="Task title"
-                          autoFocus
-                        />
-                        <div className="inline-row">
-                          <label htmlFor="quick-task-group">Group</label>
-                          <select
-                            id="quick-task-group"
-                            className="mini-input"
-                            value={newTaskGroupId}
-                            onChange={(e) => setNewTaskGroupId(e.target.value)}
-                          >
-                            {groups.map((group) => (
-                              <option key={group.id} value={group.id}>
-                                {group.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <label className="slider-label" htmlFor="quick-task-difficulty">
-                          Difficulty: {newTaskDifficulty}
-                        </label>
-                        <input
-                          id="quick-task-difficulty"
-                          type="range"
-                          min={1}
-                          max={10}
-                          value={newTaskDifficulty}
-                          onChange={(e) => setNewTaskDifficulty(Number(e.target.value))}
-                        />
-                        <button type="button" className="btn-primary" onClick={quickAddTask}>
-                          Create Task
-                        </button>
+          {/* ── SIMULATION PAGE ── */}
+          <Route path="/simulation" element={
+            <div className="page-grid">
+              {/* LEFT SIDEBAR */}
+              <aside className="sidebar-left">
+                <div className="sidebar-section">
+                  <div className="sidebar-label">Active Tasks ({activeTasks.length})</div>
+                  <button type="button" className="add-btn" onClick={() => setIsQuickAddOpen((p) => !p)}>
+                    + New Task
+                  </button>
+                  {isQuickAddOpen && (
+                    <div className="quick-add-panel">
+                      <input className="mini-input" type="text" value={newTaskTitle}
+                        onChange={(e) => setNewTaskTitle(e.target.value)}
+                        placeholder="Task title" autoFocus
+                        onKeyDown={(e) => e.key === 'Enter' && quickAddTask()}
+                      />
+                      <div className="inline-row">
+                        <label>Group</label>
+                        <select className="mini-input" value={newTaskGroupId} onChange={(e) => setNewTaskGroupId(e.target.value)}>
+                          {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                        </select>
                       </div>
-                    )}
-                    {tasks.map((task) => {
-                      const state = visibleTaskStates[task.id];
-                      const energy = (state?.entropy ?? task.difficulty) * 12;
-                      const group = groupMap[task.groupId] ?? DEFAULT_GROUP;
-                      return (
-                        <button
-                          type="button"
-                          key={task.id}
-                          className={`task-item ${selectedTask?.id === task.id ? 'active' : ''}`}
-                          onClick={() => setSelectedTaskId(task.id)}
-                        >
+                      <label className="slider-label">Difficulty: <span className="accent-text">{newTaskDifficulty}</span></label>
+                      <input type="range" min={1} max={10} value={newTaskDifficulty} onChange={(e) => setNewTaskDifficulty(Number(e.target.value))} />
+                      <button type="button" className="btn-primary" onClick={quickAddTask}>Create Task</button>
+                    </div>
+                  )}
+                  {activeTasks.map((task) => {
+                    const state = visibleTaskStates[task.id];
+                    const energy = (state?.entropy ?? task.difficulty) * 12;
+                    const group = groupMap[task.groupId] ?? DEFAULT_GROUP;
+                    const isSelected = selectedTask?.id === task.id;
+                    return (
+                      <div key={task.id} className={`task-item ${isSelected ? 'active' : ''}`}>
+                        <button type="button" className="task-check" onClick={() => toggleComplete(task.id)} title="Mark complete" aria-label={`Complete ${task.title}`}>
+                          <span className="check-inner"></span>
+                        </button>
+                        <button type="button" className="task-body" onClick={() => setSelectedTaskId(task.id)}>
                           <div className="task-name">{task.title}</div>
                           <div className="task-meta">
-                            <span className="task-tag" style={{ color: group.color, borderColor: `${group.color}55` }}>
-                              {group.name}
-                            </span>
-                            <span className="task-tag tag-m">D: {task.difficulty}</span>
+                            <span className="task-tag" style={{ color: group.color, borderColor: `${group.color}55` }}>{group.name}</span>
+                            <span className="task-tag tag-m">D:{task.difficulty}</span>
+                            {state && <span className="task-tag tag-e">S:{state.entropy.toFixed(1)}</span>}
                           </div>
                           <div className="energy-bar-wrap">
-                            <div
-                              className="energy-bar"
-                              style={{ width: `${Math.min(100, energy)}%`, background: group.color }}
-                            ></div>
+                            <div className="energy-bar" style={{ width: `${Math.min(100, energy)}%`, background: `linear-gradient(90deg, ${group.color}, ${group.color}88)` }}></div>
                           </div>
                         </button>
-                      );
-                    })}
+                      </div>
+                    );
+                  })}
+                  {completedTasks.length > 0 && (
+                    <button type="button" className="show-completed-btn" onClick={() => setShowCompleted(p => !p)}>
+                      {showCompleted ? '▲' : '▼'} {completedTasks.length} completed
+                    </button>
+                  )}
+                  {showCompleted && completedTasks.map((task) => {
+                    const group = groupMap[task.groupId] ?? DEFAULT_GROUP;
+                    return (
+                      <div key={task.id} className="task-item completed">
+                        <button type="button" className="task-check checked" onClick={() => toggleComplete(task.id)} title="Unmark complete">
+                          <span className="check-inner">✓</span>
+                        </button>
+                        <div className="task-body">
+                          <div className="task-name completed-name">{task.title}</div>
+                          <div className="task-meta">
+                            <span className="task-tag" style={{ color: group.color, borderColor: `${group.color}55` }}>{group.name}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {selectedTask && !selectedTask.completed && (
+                  <div className="sidebar-section inline-editor">
+                    <div className="sidebar-label">Quick Edit</div>
+                    <input className="mini-input" type="text" value={selectedTask.title}
+                      onChange={(e) => patchTask(selectedTask.id, { title: e.target.value })} />
+                    <select className="mini-input" value={selectedTask.groupId}
+                      onChange={(e) => patchTask(selectedTask.id, { groupId: e.target.value })}>
+                      {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                    </select>
+                    <label className="slider-label">Difficulty: <span className="accent-text">{selectedTask.difficulty}</span></label>
+                    <input type="range" min={1} max={10} value={selectedTask.difficulty}
+                      onChange={(e) => patchTask(selectedTask.id, { difficulty: Number(e.target.value) })} />
+                    <div className="btn-row">
+                      <button type="button" className="btn-primary small" onClick={() => toggleComplete(selectedTask.id)}>✓ Complete</button>
+                      <button type="button" className="btn-sm danger" onClick={() => removeTask(selectedTask.id)}>✕ Remove</button>
+                    </div>
                   </div>
+                )}
+              </aside>
 
-                  {selectedTask && (
-                    <div className="sidebar-section inline-editor">
-                      <div className="sidebar-label">Quick Edit</div>
-                      <input
-                        className="mini-input"
-                        type="text"
-                        value={selectedTask.title}
-                        onChange={(e) => patchTask(selectedTask.id, { title: e.target.value })}
-                      />
-                      <select
-                        className="mini-input"
-                        value={selectedTask.groupId}
-                        onChange={(e) => patchTask(selectedTask.id, { groupId: e.target.value })}
-                      >
-                        {groups.map((group) => (
-                          <option key={group.id} value={group.id}>
-                            {group.name}
-                          </option>
-                        ))}
-                      </select>
-                      <label className="slider-label" htmlFor="sim-inline-difficulty">
-                        Difficulty: {selectedTask.difficulty}
-                      </label>
-                      <input
-                        id="sim-inline-difficulty"
-                        type="range"
-                        min={1}
-                        max={10}
-                        value={selectedTask.difficulty}
-                        onChange={(e) => patchTask(selectedTask.id, { difficulty: Number(e.target.value) })}
-                      />
-                      <button
-                        type="button"
-                        className="btn-sm danger"
-                        onClick={() => removeTask(selectedTask.id)}
-                      >
-                        Remove Task
-                      </button>
+              {/* CANVAS */}
+              <section className="canvas-area" aria-label="Engine visualization">
+                <div className="grid-lines"></div>
+                <div className="canvas-overlay-label top-left">PHASE SPACE</div>
+                <div className="canvas-overlay-label top-right">Δt = 0.016s</div>
+                <div className="canvas-overlay-label bottom-left">
+                  {Object.entries(activeModels).filter(([,v]) => v).map(([k]) => k).join(' · ')}
+                </div>
+                <svg className="canvas-svg" viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+                  {/* Grid */}
+                  <defs>
+                    <radialGradient id="glow-blue" cx="50%" cy="50%" r="50%">
+                      <stop offset="0%" stopColor="#4f8ef7" stopOpacity="0.4"/>
+                      <stop offset="100%" stopColor="#4f8ef7" stopOpacity="0"/>
+                    </radialGradient>
+                    <radialGradient id="glow-purple" cx="50%" cy="50%" r="50%">
+                      <stop offset="0%" stopColor="#a78bfa" stopOpacity="0.4"/>
+                      <stop offset="100%" stopColor="#a78bfa" stopOpacity="0"/>
+                    </radialGradient>
+                    <filter id="blur-glow">
+                      <feGaussianBlur stdDeviation="3" result="blur"/>
+                      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                    </filter>
+                  </defs>
+                  {/* Axes */}
+                  <line x1="50" y1="550" x2="860" y2="550" stroke="rgba(255,255,255,0.06)" strokeWidth="1"/>
+                  <line x1="50" y1="50" x2="50" y2="550" stroke="rgba(255,255,255,0.06)" strokeWidth="1"/>
+                  {/* Grid ticks */}
+                  {[0,1,2,3,4,5,6,7].map(i => (
+                    <line key={i} x1={50 + i*115} y1="50" x2={50 + i*115} y2="550" stroke="rgba(255,255,255,0.03)" strokeWidth="1"/>
+                  ))}
+                  {[0,1,2,3,4].map(i => (
+                    <line key={i} x1="50" y1={50 + i*125} x2="860" y2={50 + i*125} stroke="rgba(255,255,255,0.03)" strokeWidth="1"/>
+                  ))}
+                  {/* Energy field background glow for active models */}
+                  {activeModels.QUANTUM && <ellipse cx="450" cy="300" rx="300" ry="200" fill="url(#glow-purple)" opacity="0.3"/>}
+                  {activeModels.CHAOS && <ellipse cx="450" cy="300" rx="350" ry="250" fill="url(#glow-blue)" opacity="0.15"/>}
+                  {/* Task particles */}
+                  {activeTasks.map((task, index) => {
+                    const state = visibleTaskStates[task.id];
+                    const group = groupMap[task.groupId] ?? DEFAULT_GROUP;
+                    const fallbackX = 130 + ((index * 97) % 700);
+                    const fallbackY = 100 + ((index * 63) % 400);
+                    const baseX = state?.posX != null ? 450 + state.posX * 120 : fallbackX;
+                    const baseY = state?.posY != null ? 300 + state.posY * 120 : fallbackY;
+                    // Animate with tick for liveliness
+                    const wobble = activeModels.CHAOS ? Math.sin(tick * 0.05 + index) * 4 : 0;
+                    const x = Math.max(60, Math.min(840, baseX + wobble));
+                    const y = Math.max(60, Math.min(540, baseY + Math.cos(tick * 0.04 + index) * (activeModels.CHAOS ? 3 : 0)));
+                    const r = 5 + task.difficulty * 1.2;
+                    const isSelected = selectedTask?.id === task.id;
+                    const entropy = state?.entropy ?? 0;
+                    const collapsePct = state?.collapseProbability ?? 0;
+                    // Quantum ring for quantum model
+                    const quantumRingR = r + 12 + Math.sin(tick * 0.08 + index) * 3;
+                    return (
+                      <g key={task.id} onClick={() => setSelectedTaskId(task.id)} style={{ cursor: 'pointer' }} filter={isSelected ? 'url(#blur-glow)' : undefined}>
+                        {/* Outer glow */}
+                        <circle cx={x} cy={y} r={r + 14} fill={group.color} opacity={isSelected ? 0.18 : 0.07}/>
+                        {/* Quantum ring */}
+                        {activeModels.QUANTUM && (
+                          <circle cx={x} cy={y} r={quantumRingR} fill="none" stroke={group.color} strokeWidth="0.8"
+                            strokeDasharray={`${collapsePct * 2} ${(1 - collapsePct) * 2}`} opacity="0.5"/>
+                        )}
+                        {/* Velocity trail */}
+                        {state && (Math.abs(state.stressX) + Math.abs(state.stressY) > 0.1) && (
+                          <line x1={x} y1={y} x2={x - state.stressX * 20} y2={y - state.stressY * 20}
+                            stroke={group.color} strokeWidth="1.5" strokeLinecap="round" opacity="0.4"/>
+                        )}
+                        {/* Entropy halo */}
+                        {entropy > 1 && <circle cx={x} cy={y} r={r + 6 + entropy * 0.5} fill="none" stroke={group.color} strokeWidth="0.5" opacity="0.3"/>}
+                        {/* Main particle */}
+                        <circle cx={x} cy={y} r={r} fill={group.color} opacity={0.85}/>
+                        {/* Inner highlight */}
+                        <circle cx={x - r * 0.3} cy={y - r * 0.3} r={r * 0.35} fill="white" opacity="0.2"/>
+                        {/* Label */}
+                        <text x={x} y={y - r - 8} textAnchor="middle" className="canvas-label">{task.title.slice(0, 16)}</text>
+                        {/* Difficulty badge */}
+                        <text x={x} y={y + 4} textAnchor="middle" className="canvas-badge">{task.difficulty}</text>
+                      </g>
+                    );
+                  })}
+                  {/* Completed tasks as faded dots */}
+                  {completedTasks.map((task, index) => {
+                    const group = groupMap[task.groupId] ?? DEFAULT_GROUP;
+                    const x = 80 + ((index * 60) % 780);
+                    const y = 570;
+                    return (
+                      <g key={task.id} opacity="0.3">
+                        <circle cx={x} cy={y} r={4} fill={group.color}/>
+                        <text x={x} y={y - 8} textAnchor="middle" className="canvas-label" fontSize="8">✓</text>
+                      </g>
+                    );
+                  })}
+                  {/* Axis labels */}
+                  <text x="455" y="595" textAnchor="middle" className="canvas-label" opacity="0.4">Position X</text>
+                  <text x="20" y="305" textAnchor="middle" className="canvas-label" opacity="0.4" transform="rotate(-90,20,305)">Position Y</text>
+                </svg>
+
+                {selectedTask && !selectedTask.completed && (
+                  <div className="canvas-controls">
+                    <span className="ctrl-label">{selectedTask.title.slice(0, 12)}</span>
+                    <div className="ctrl-divider"/>
+                    <button type="button" className="ctrl-btn play" onClick={() => collapse(selectedTask.id)} title="Collapse quantum state">⊗ Collapse</button>
+                    <button type="button" className="ctrl-btn" onClick={() => applyForce(selectedTask.id, 2.0, 0.5, 0.2)} title="Apply positive force">→ Push</button>
+                    <button type="button" className="ctrl-btn" onClick={() => applyForce(selectedTask.id, -1.5, -0.5, 0)} title="Apply negative force">← Pull</button>
+                    <button type="button" className="ctrl-btn" onClick={() => applyForce(selectedTask.id, 0, 2.0, 0.5)} title="Apply upward force">↑ Lift</button>
+                    <button type="button" className="ctrl-btn accent" onClick={() => toggleComplete(selectedTask.id)} title="Mark complete">✓ Done</button>
+                  </div>
+                )}
+              </section>
+
+              {/* RIGHT SIDEBAR */}
+              <aside className="sidebar-right">
+                <div className="panel-block">
+                  <div className="panel-title">system state</div>
+                  <div className="metric-row">
+                    <div className="metric-card">
+                      <div className="metric-val accent">{totalEnergy.toFixed(1)}</div>
+                      <div className="metric-lbl">Total Energy</div>
                     </div>
-                  )}
-                </aside>
-
-                <section className="canvas-area" aria-label="Engine visualization">
-                  <div className="grid-lines"></div>
-                  <div className="canvas-overlay-label top-left">PHASE SPACE</div>
-                  <div className="canvas-overlay-label top-right">Delta t = 0.016s</div>
-                  <svg className="canvas-svg" viewBox="0 0 800 520" xmlns="http://www.w3.org/2000/svg">
-                    <line x1="50" y1="470" x2="760" y2="470" stroke="rgba(255,255,255,0.08)" />
-                    <line x1="50" y1="60" x2="50" y2="470" stroke="rgba(255,255,255,0.08)" />
-                    {tasks.map((task, index) => {
-                      const state = visibleTaskStates[task.id];
-                      const group = groupMap[task.groupId] ?? DEFAULT_GROUP;
-                      const fallbackX = 130 + ((index * 97) % 560);
-                      const fallbackY = 130 + ((index * 63) % 280);
-                      const x = state?.posX != null ? 400 + state.posX * 100 : fallbackX;
-                      const y = state?.posY != null ? 260 + state.posY * 100 : fallbackY;
-                      const r = 5 + task.difficulty;
-                      return (
-                        <g key={task.id} onClick={() => setSelectedTaskId(task.id)}>
-                          <circle
-                            cx={x}
-                            cy={y}
-                            r={r + 7}
-                            fill={group.color}
-                            opacity={selectedTask?.id === task.id ? 0.22 : 0.1}
-                          />
-                          <circle cx={x} cy={y} r={r} fill={group.color} opacity={0.8} />
-                          <text x={x} y={y - r - 10} textAnchor="middle" className="canvas-label">
-                            {task.title.slice(0, 18)}
-                          </text>
-                        </g>
-                      );
-                    })}
-                  </svg>
-
-                  {selectedTask && (
-                    <div className="canvas-controls">
-                      <button type="button" className="ctrl-btn play" onClick={() => collapse(selectedTask.id)}>
-                        Collapse
-                      </button>
-                      <button
-                        type="button"
-                        className="ctrl-btn"
-                        onClick={() => applyForce(selectedTask.id, 1.5, 0.6, 0.2)}
-                      >
-                        Push +X
-                      </button>
-                      <button
-                        type="button"
-                        className="ctrl-btn"
-                        onClick={() => applyForce(selectedTask.id, -1.2, -0.3, 0)}
-                      >
-                        Pull
-                      </button>
+                    <div className="metric-card">
+                      <div className="metric-val purple">{entropyScore.toFixed(2)}</div>
+                      <div className="metric-lbl">Avg Entropy</div>
                     </div>
-                  )}
-                </section>
+                    <div className="metric-card">
+                      <div className="metric-val green">{completedTasks.length}</div>
+                      <div className="metric-lbl">Completed</div>
+                    </div>
+                    <div className="metric-card">
+                      <div className="metric-val" style={{ color: heatPct > 80 ? 'var(--coral)' : 'var(--amber)' }}>{Math.max(0, 100 - heatPct).toFixed(0)}%</div>
+                      <div className="metric-lbl">Stability</div>
+                    </div>
+                  </div>
+                  <SystemEnergyGauge systemEnergy={totalEnergy} maxEnergy={Math.max(totalEnergy, 100)} />
+                  {/* Energy sparkline */}
+                  <div className="sparkline-wrap">
+                    <div className="sparkline-label">Energy History</div>
+                    <svg width="100%" height="36" viewBox={`0 0 200 36`} preserveAspectRatio="none">
+                      <path d={sparklinePath(energyHistory, 200, 36)} fill="none" stroke="var(--accent)" strokeWidth="1.5" opacity="0.7"/>
+                      <path d={sparklinePath(energyHistory, 200, 36) + ' L200,36 L0,36 Z'} fill="var(--accent)" opacity="0.08"/>
+                    </svg>
+                  </div>
+                  <div className="sparkline-wrap">
+                    <div className="sparkline-label">Entropy History</div>
+                    <svg width="100%" height="36" viewBox={`0 0 200 36`} preserveAspectRatio="none">
+                      <path d={sparklinePath(entropyHistory, 200, 36)} fill="none" stroke="var(--accent2)" strokeWidth="1.5" opacity="0.7"/>
+                      <path d={sparklinePath(entropyHistory, 200, 36) + ' L200,36 L0,36 Z'} fill="var(--accent2)" opacity="0.08"/>
+                    </svg>
+                  </div>
+                </div>
 
-                <aside className="sidebar-right">
-                  <div className="panel-block">
-                    <div className="panel-title">system state</div>
-                    <div className="metric-row">
-                      <div className="metric-card">
-                        <div className="metric-val">{totalEnergy.toFixed(1)}</div>
-                        <div className="metric-lbl">Total Energy</div>
-                      </div>
-                      <div className="metric-card">
-                        <div className="metric-val">{entropyScore.toFixed(2)}</div>
-                        <div className="metric-lbl">Entropy</div>
-                      </div>
-                      <div className="metric-card">
-                        <div className="metric-val">{tasks.length}</div>
-                        <div className="metric-lbl">Tasks</div>
-                      </div>
-                      <div className="metric-card">
-                        <div className="metric-val">{Math.max(0, 100 - heatPct).toFixed(0)}%</div>
-                        <div className="metric-lbl">Stability</div>
-                      </div>
+                <div className="panel-block">
+                  <div className="panel-title">physics models</div>
+                  <div className="phase-model-row">
+                    {Object.entries(activeModels).map(([model, on]) => (
+                      <button key={model} type="button"
+                        className={`model-pill ${on ? 'on' : 'off'}`}
+                        onClick={() => setActiveModels((prev) => ({ ...prev, [model]: !prev[model] }))}>
+                        {model}
+                      </button>
+                    ))}
+                  </div>
+                  <DampingControls
+                    isDampingEnabled={isDampingEnabled}
+                    dampingCoefficient={dampingCoefficient}
+                    onEnableDamping={(coeff) => { setIsDampingEnabled(true); setDampingCoefficient(coeff); }}
+                    onDisableDamping={() => setIsDampingEnabled(false)}
+                  />
+                </div>
+
+                {selectedTask && !selectedTask.completed && (
+                  <div className="panel-block task-detail">
+                    <div className="detail-name">{selectedTask.title}</div>
+                    <div className="detail-row">
+                      <span className="detail-key">GROUP</span>
+                      <span className="detail-val" style={{ color: (groupMap[selectedTask.groupId] ?? DEFAULT_GROUP).color }}>
+                        {(groupMap[selectedTask.groupId] ?? DEFAULT_GROUP).name}
+                      </span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-key">DIFFICULTY</span>
+                      <span className="detail-val">{selectedTask.difficulty}</span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-key">ENTROPY</span>
+                      <span className="detail-val">{(visibleTaskStates[selectedTask.id]?.entropy ?? 0).toFixed(3)}</span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-key">STRESS X</span>
+                      <span className="detail-val">{(visibleTaskStates[selectedTask.id]?.stressX ?? 0).toFixed(3)}</span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-key">STRESS Y</span>
+                      <span className="detail-val">{(visibleTaskStates[selectedTask.id]?.stressY ?? 0).toFixed(3)}</span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-key">COLLAPSE P</span>
+                      <span className="detail-val">{((visibleTaskStates[selectedTask.id]?.collapseProbability ?? 0) * 100).toFixed(1)}%</span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-key">STEPS</span>
+                      <span className="detail-val">{visibleTaskStates[selectedTask.id]?.stepCount ?? 0}</span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-key">HEAT</span>
+                      <span className="detail-val">{heatDisplay}K</span>
                     </div>
                     <div style={{ marginTop: 8 }}>
-                      <SystemEnergyGauge systemEnergy={totalEnergy} maxEnergy={Math.max(totalEnergy, 100)} />
-                    </div>
-                  </div>
-
-                  <div className="panel-block">
-                    <div className="panel-title">active models</div>
-                    <div className="phase-model-row">
-                      {Object.keys(activeModels).map((model) => (
-                        <button
-                          key={model}
-                          type="button"
-                          className={`model-pill ${activeModels[model] ? 'on' : 'off'}`}
-                          onClick={() =>
-                            setActiveModels((prev) => ({
-                              ...prev,
-                              [model]: !prev[model],
-                            }))
-                          }
-                        >
-                          {model}
-                        </button>
-                      ))}
-                    </div>
-                    <DampingControls
-                      isDampingEnabled={isDampingEnabled}
-                      dampingCoefficient={dampingCoefficient}
-                      onEnableDamping={(coeff) => {
-                        setIsDampingEnabled(true);
-                        setDampingCoefficient(coeff);
-                      }}
-                      onDisableDamping={() => setIsDampingEnabled(false)}
-                    />
-                  </div>
-
-                  {selectedTask && (
-                    <div className="panel-block task-detail">
-                      <div className="detail-name">{selectedTask.title}</div>
-                      <div className="detail-row">
-                        <span className="detail-key">GROUP</span>
-                        <span className="detail-val">{(groupMap[selectedTask.groupId] ?? DEFAULT_GROUP).name}</span>
-                      </div>
-                      <div className="detail-row">
-                        <span className="detail-key">DIFFICULTY</span>
-                        <span className="detail-val">{selectedTask.difficulty}</span>
-                      </div>
-                      <div className="detail-row">
-                        <span className="detail-key">ENTROPY</span>
-                        <span className="detail-val">{(visibleTaskStates[selectedTask.id]?.entropy ?? 0).toFixed(2)}</span>
-                      </div>
-                      <div className="detail-row">
-                        <span className="detail-key">HEAT</span>
-                        <span className="detail-val">{heatDisplay}K</span>
-                      </div>
-                      <div style={{ marginTop: 8 }}>
-                        <TaskEnergyDisplay
-                          taskId={selectedTask.id}
-                          kineticEnergy={(visibleTaskStates[selectedTask.id]?.entropy ?? 0) * 6}
-                          potentialEnergy={selectedTask.difficulty * 4}
-                          totalEnergy={(visibleTaskStates[selectedTask.id]?.entropy ?? 0) * 6 + selectedTask.difficulty * 4}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </aside>
-              </div>
-            }
-          />
-
-          <Route
-            path="/tasks"
-            element={
-              <div className="page-simple">
-                <div className="panel-card">
-                  <h2>Create Task</h2>
-                  <form className="task-form" onSubmit={addTask}>
-                    <input
-                      type="text"
-                      value={newTaskTitle}
-                      onChange={(e) => setNewTaskTitle(e.target.value)}
-                      placeholder="Task title"
-                      aria-label="Task title"
-                    />
-                    <div className="inline-row">
-                      <label htmlFor="task-group">Group</label>
-                      <select
-                        id="task-group"
-                        value={newTaskGroupId}
-                        onChange={(e) => setNewTaskGroupId(e.target.value)}
-                      >
-                        {groups.map((group) => (
-                          <option key={group.id} value={group.id}>
-                            {group.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="inline-row">
-                      <label htmlFor="new-task-difficulty">Difficulty: {newTaskDifficulty}</label>
-                      <input
-                        id="new-task-difficulty"
-                        type="range"
-                        min={1}
-                        max={10}
-                        value={newTaskDifficulty}
-                        onChange={(e) => setNewTaskDifficulty(Number(e.target.value))}
+                      <TaskEnergyDisplay
+                        taskId={selectedTask.id}
+                        kineticEnergy={(visibleTaskStates[selectedTask.id]?.entropy ?? 0) * 6}
+                        potentialEnergy={selectedTask.difficulty * 4}
+                        totalEnergy={(visibleTaskStates[selectedTask.id]?.entropy ?? 0) * 6 + selectedTask.difficulty * 4}
                       />
                     </div>
-                    <button className="btn-primary" type="submit">
-                      Add Task
-                    </button>
-                  </form>
-                </div>
+                  </div>
+                )}
 
-                <div className="panel-card">
-                  <h2>Task Board (Drag and Drop)</h2>
-                  <div className="group-board">
-                    {groupedTasks.map(({ group, tasks: grouped }) => (
-                      <section
-                        key={group.id}
-                        className={`group-column ${dragTaskId ? 'drop-ready' : ''}`}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          if (!dragTaskId) return;
-                          moveTask(dragTaskId, group.id);
-                          setDragTaskId(null);
-                        }}
-                      >
+                {/* System heat bar */}
+                <div className="panel-block">
+                  <div className="panel-title">thermal state</div>
+                  <div className="heat-bar-wrap">
+                    <div className="heat-bar-track">
+                      <div className="heat-bar-fill" style={{ width: `${heatPct}%`, background: heatPct > 80 ? 'linear-gradient(90deg,var(--amber),var(--coral))' : 'linear-gradient(90deg,var(--green),var(--amber))' }}/>
+                    </div>
+                    <div className="heat-labels">
+                      <span>{heatDisplay}K</span>
+                      <span style={{ color: heatPct > 80 ? 'var(--coral)' : 'var(--muted)' }}>{heatPct > 80 ? '🔥 CRITICAL' : 'NOMINAL'}</span>
+                    </div>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          }/>
+
+          {/* ── TASKS PAGE ── */}
+          <Route path="/tasks" element={
+            <div className="tasks-page">
+              <div className="tasks-header">
+                <div className="tasks-header-left">
+                  <h2>Task Board</h2>
+                  <span className="tasks-count">{activeTasks.length} active · {completedTasks.length} done</span>
+                </div>
+                <form className="task-inline-form" onSubmit={addTask}>
+                  <input type="text" value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} placeholder="New task title..." className="mini-input" />
+                  <select className="mini-input compact" value={newTaskGroupId} onChange={(e) => setNewTaskGroupId(e.target.value)}>
+                    {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                  </select>
+                  <input type="range" min={1} max={10} value={newTaskDifficulty} onChange={(e) => setNewTaskDifficulty(Number(e.target.value))} title={`Difficulty: ${newTaskDifficulty}`} />
+                  <span className="difficulty-badge">D:{newTaskDifficulty}</span>
+                  <button className="btn-primary compact" type="submit">+ Add</button>
+                </form>
+              </div>
+              <div className="group-board">
+                {groupedTasks.map(({ group, tasks: grouped }) => {
+                  const active = grouped.filter(t => !t.completed);
+                  const done = grouped.filter(t => t.completed);
+                  return (
+                    <section key={group.id} className={`group-column ${dragTaskId ? 'drop-ready' : ''}`}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => { e.preventDefault(); if (!dragTaskId) return; moveTask(dragTaskId, group.id); setDragTaskId(null); }}>
+                      <div className="group-col-header">
+                        <span className="group-swatch" style={{ background: group.color }}/>
                         <h3 style={{ color: group.color }}>{group.name}</h3>
-                        {grouped.length === 0 && <p className="empty">Drop tasks here</p>}
-                        {grouped.map((task) => (
-                          <div
-                            key={task.id}
-                            className="draggable-task"
-                            draggable
-                            onDragStart={(e) => {
-                              e.dataTransfer.effectAllowed = 'move';
-                              setDragTaskId(task.id);
-                            }}
+                        <span className="group-count">{active.length}</span>
+                      </div>
+                      {active.length === 0 && done.length === 0 && <p className="empty">Drop tasks here</p>}
+                      {active.map((task) => {
+                        const state = visibleTaskStates[task.id];
+                        return (
+                          <div key={task.id} className="draggable-task" draggable
+                            onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setDragTaskId(task.id); }}
                             onDragEnd={() => setDragTaskId(null)}
                             onDragOver={(e) => e.preventDefault()}
-                            onDrop={(e) => {
-                              e.preventDefault();
-                              if (!dragTaskId) return;
-                              moveTask(dragTaskId, group.id, task.id);
-                              setDragTaskId(null);
-                            }}
-                          >
-                            <div className="task-list-title">{task.title}</div>
-                            <div className="task-list-meta">
-                              <span>Difficulty {task.difficulty}</span>
+                            onDrop={(e) => { e.preventDefault(); if (!dragTaskId) return; moveTask(dragTaskId, group.id, task.id); setDragTaskId(null); }}>
+                            <div className="task-card-top">
+                              <button type="button" className="task-check-card" onClick={() => toggleComplete(task.id)} title="Mark complete">
+                                <span className="check-inner-card"></span>
+                              </button>
+                              <div className="task-list-title">{task.title}</div>
                             </div>
-                            <div className="difficulty-controls" role="group" aria-label={`Difficulty for ${task.title}`}>
-                              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((level) => (
-                                <button
-                                  type="button"
-                                  key={level}
+                            <div className="task-physics-row">
+                              <span className="phys-badge">D:{task.difficulty}</span>
+                              {state && <span className="phys-badge purple">S:{state.entropy.toFixed(1)}</span>}
+                              {state && <span className="phys-badge amber">P:{(state.collapseProbability * 100).toFixed(0)}%</span>}
+                            </div>
+                            <div className="difficulty-controls" role="group">
+                              {[1,2,3,4,5,6,7,8,9,10].map((level) => (
+                                <button type="button" key={level}
                                   className={task.difficulty === level ? 'level active' : 'level'}
-                                  onClick={() => patchTask(task.id, { difficulty: level })}
-                                  aria-label={`Set ${task.title} difficulty to ${level}`}
-                                >
-                                  {level}
-                                </button>
+                                  onClick={() => patchTask(task.id, { difficulty: level })}>{level}</button>
                               ))}
                             </div>
+                            <div className="energy-bar-wrap" style={{ marginTop: 6 }}>
+                              <div className="energy-bar" style={{ width: `${Math.min(100, task.difficulty * 10)}%`, background: group.color }}/>
+                            </div>
                             <div className="task-actions">
-                              <button
-                                type="button"
-                                className="btn-sm"
-                                onClick={() => setSelectedTaskId(task.id)}
-                              >
-                                Focus
-                              </button>
-                              <button
-                                type="button"
-                                className="btn-sm danger"
-                                onClick={() => removeTask(task.id)}
-                              >
-                                Remove
-                              </button>
+                              <button type="button" className="btn-sm" onClick={() => { setSelectedTaskId(task.id); navigate('/simulation'); }}>⚛ Simulate</button>
+                              <button type="button" className="btn-sm accent-btn" onClick={() => toggleComplete(task.id)}>✓ Done</button>
+                              <button type="button" className="btn-sm danger" onClick={() => removeTask(task.id)}>✕</button>
                             </div>
                           </div>
-                        ))}
-                      </section>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            }
-          />
-
-          <Route
-            path="/groups"
-            element={
-              <div className="page-simple">
-                <div className="panel-card">
-                  <h2>Create Task Group</h2>
-                  <form className="task-form" onSubmit={addGroup}>
-                    <input
-                      type="text"
-                      value={newGroupName}
-                      onChange={(e) => setNewGroupName(e.target.value)}
-                      placeholder="Group name"
-                      aria-label="Group name"
-                    />
-                    <div className="inline-row">
-                      <label htmlFor="group-color">Color</label>
-                      <input
-                        id="group-color"
-                        type="color"
-                        value={newGroupColor}
-                        onChange={(e) => setNewGroupColor(e.target.value)}
-                      />
-                    </div>
-                    <button className="btn-primary" type="submit">
-                      Add Group
-                    </button>
-                  </form>
-                </div>
-
-                <div className="panel-card">
-                  <h2>Groups</h2>
-                  <div className="group-list">
-                    {groupedTasks.map(({ group, tasks: grouped }) => (
-                      <div className="group-item" key={group.id}>
-                        <div>
-                          <div className="group-title">
-                            <span className="swatch" style={{ background: group.color }}></span>
-                            {group.name}
-                          </div>
-                          <p>{grouped.length} task(s)</p>
+                        );
+                      })}
+                      {done.length > 0 && (
+                        <div className="completed-section">
+                          <div className="completed-divider">✓ {done.length} completed</div>
+                          {done.map((task) => (
+                            <div key={task.id} className="draggable-task completed-card">
+                              <div className="task-card-top">
+                                <button type="button" className="task-check-card checked" onClick={() => toggleComplete(task.id)}>
+                                  <span className="check-inner-card">✓</span>
+                                </button>
+                                <div className="task-list-title completed-name">{task.title}</div>
+                              </div>
+                              <div className="task-actions">
+                                <button type="button" className="btn-sm" onClick={() => toggleComplete(task.id)}>↩ Restore</button>
+                                <button type="button" className="btn-sm danger" onClick={() => removeTask(task.id)}>✕</button>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                        <button
-                          type="button"
-                          className="btn-sm"
-                          onClick={() => deleteGroup(group.id)}
-                          disabled={group.id === DEFAULT_GROUP_ID}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                      )}
+                    </section>
+                  );
+                })}
               </div>
-            }
-          />
-
-          <Route
-            path="/analytics"
-            element={
-              <div className="page-simple analytics-grid">
-                <div className="panel-card">
-                  <h2>System Heat</h2>
-                  <p className="big-stat">{heatDisplay} K</p>
-                  <div className="bar">
-                    <div className="fill" style={{ width: `${heatPct}%` }}></div>
-                  </div>
-                </div>
-                <div className="panel-card">
-                  <h2>Average Difficulty</h2>
-                  <p className="big-stat">{avgDifficulty.toFixed(2)}</p>
-                </div>
-                <div className="panel-card">
-                  <h2>Group Balance</h2>
-                  <ul className="stat-list">
-                    {groupedTasks.map(({ group, tasks: grouped }) => (
-                      <li key={group.id}>
-                        <span>{group.name}</span>
-                        <span>{grouped.length}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <EnergyAnalytics meanEnergy={0} stdDevEnergy={0} />
-              </div>
-            }
-          />
-
-          <Route path="*" element={<Navigate to="/simulation" replace />} />
-        </Routes>
-      </div>
-    </div>
-  );
-}
-
-export default App;
+            </div>
+          }/>
