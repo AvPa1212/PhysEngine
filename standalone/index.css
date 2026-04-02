@@ -24,6 +24,7 @@ body {
     margin: 0;
     color: var(--text-main);
     font-family: 'Space Grotesk', sans-serif;
+    line-height: 1.4;
     overflow: hidden;
     user-select: none;
     background:
@@ -125,6 +126,10 @@ canvas {
     pointer-events: none;
 }
 
+#hud > * {
+    min-width: 0;
+}
+
 .panel {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), var(--glass));
     border: 1px solid var(--glass-border);
@@ -169,6 +174,11 @@ canvas {
     gap: 8px;
 }
 
+.title-wrap,
+.hero-meta {
+    min-width: 0;
+}
+
 .subtitle {
     color: var(--text-soft);
     margin-top: 4px;
@@ -204,6 +214,8 @@ canvas {
     letter-spacing: 0.4px;
     padding: 6px 12px;
     text-transform: uppercase;
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 .xp-track {
@@ -250,7 +262,7 @@ canvas {
 .stat-row {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     gap: 12px;
     font-size: 0.92rem;
     color: var(--text-soft);
@@ -394,7 +406,7 @@ input[type=range] {
 }
 
 .badge {
-    font-size: 0.74rem;
+    font-size: 0.8rem;
     padding: 6px 9px;
     border-radius: 999px;
     border: 1px solid rgba(255, 255, 255, 0.22);
@@ -437,8 +449,11 @@ input[type=range] {
     z-index: 13;
     pointer-events: auto;
     display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 10px;
     padding: 10px;
+    max-width: calc(100vw - 24px);
     border-radius: 16px;
     background: rgba(8, 18, 44, 0.52);
     backdrop-filter: blur(14px);
@@ -457,7 +472,10 @@ input[type=range] {
     cursor: pointer;
     transition: transform 180ms ease, box-shadow 220ms ease, border-color 180ms ease;
     text-transform: uppercase;
-    font-size: 0.76rem;
+    font-size: clamp(0.8rem, 1vw, 0.92rem);
+    line-height: 1.2;
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 .btn:hover {
@@ -514,14 +532,87 @@ input[type=range] {
 }
 
 .boot-banner span {
-    font-size: 0.78rem;
+    font-size: 0.84rem;
     color: var(--text-soft);
     line-height: 1.35;
+    overflow-wrap: anywhere;
 }
 
 .boot-banner.error {
     border-color: rgba(255, 77, 141, 0.45);
     background: linear-gradient(135deg, rgba(56, 10, 32, 0.96), rgba(24, 12, 38, 0.9));
+}
+
+.debug-console {
+    position: fixed;
+    right: 14px;
+    top: 14px;
+    z-index: 1250;
+    width: min(42vw, 560px);
+    max-height: min(56vh, 440px);
+    border-radius: 14px;
+    border: 1px solid rgba(255, 107, 134, 0.5);
+    background: linear-gradient(135deg, rgba(26, 11, 18, 0.96), rgba(14, 9, 18, 0.9));
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.debug-console__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.debug-console__head strong {
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    color: #ffdbe4;
+    font-family: 'Syne', sans-serif;
+}
+
+.debug-console__head span {
+    font-size: 0.68rem;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.debug-console__body {
+    margin: 0;
+    padding: 10px;
+    font-size: 0.78rem;
+    line-height: 1.35;
+    color: #ffe7ed;
+    font-family: Consolas, 'Courier New', monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow: auto;
+    max-height: min(50vh, 370px);
+}
+
+.stat-row span,
+.quest-top span,
+.score-pill,
+.badge,
+.toast,
+.section-head,
+.subtitle,
+.panel,
+.btn {
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+    .debug-console {
+        left: 10px;
+        right: 10px;
+        width: auto;
+        max-height: 40vh;
+    }
 }
 
 .toast {
@@ -623,5 +714,29 @@ input[type=range] {
         justify-content: flex-start;
         left: 9px;
         transform: none;
+    }
+
+    .badge {
+        font-size: 0.82rem;
+    }
+}
+
+@media (max-width: 760px) {
+    .panel {
+        padding: 12px;
+    }
+
+    .section-head {
+        font-size: 0.86rem;
+    }
+
+    .stat-row {
+        font-size: 0.86rem;
+    }
+
+    .boot-banner {
+        left: 10px;
+        right: 10px;
+        max-width: none;
     }
 }

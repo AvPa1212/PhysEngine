@@ -131,7 +131,16 @@ else()
             target_compile_options(${target} PRIVATE ${MAT_EXTRA_COMPILE_OPTIONS})
         endif()
 
-        gtest_discover_tests(${target})
+        # Register tests at configure time instead of via generated discovery
+        # wrappers. The current wrapper-based flow can degrade into
+        # `*_NOT_BUILT` placeholder tests on this Windows toolchain even when
+        # the executables and discovered test lists exist.
+        gtest_add_tests(
+            TARGET ${target}
+            SOURCES ${MAT_SOURCES} ${MAT_EXTRA_SOURCES}
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+            TEST_LIST ${target}_TESTS
+        )
     endfunction()
 
     momentum_add_test(ComplexTests SOURCES tests/ComplexTests.cpp)
@@ -208,13 +217,11 @@ else()
         IntegrationTests
         USE_CORE
         SOURCES tests/IntegrationTests.cpp
-        EXTRA_SOURCES src/physics/EnergyEngine.cpp
     )
     momentum_add_test(
         BenchmarkTests
         USE_CORE
         SOURCES tests/BenchmarkTests.cpp
-        EXTRA_SOURCES src/physics/EnergyEngine.cpp
     )
     momentum_add_test(
         EnergyEngineTests

@@ -51,6 +51,7 @@ body {
   overflow: hidden;
   font-family: var(--sans);
   color: var(--text);
+  line-height: 1.45;
   background:
     radial-gradient(circle at 18% 10%, rgba(109, 167, 255, 0.18), transparent 28%),
     radial-gradient(circle at 82% 18%, rgba(155, 140, 255, 0.15), transparent 24%),
@@ -225,6 +226,7 @@ body::after {
   gap: 10px;
   flex-wrap: wrap;
   justify-content: flex-end;
+  min-width: 0;
 }
 
 .sim-badge,
@@ -254,6 +256,8 @@ body::after {
   border-radius: 999px;
   color: var(--muted);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .sim-badge.blue { color: #9ac0ff; }
 .sim-badge.green { color: #8ff0b4; }
@@ -389,8 +393,8 @@ body::after {
 .stat-sub,
 .heat-labels,
 .model-status-name {
-  font-size: .76rem;
-  letter-spacing: 0.16em;
+  font-size: .82rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
 }
@@ -507,6 +511,7 @@ select:focus {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transition: transform .22s ease, border-color .22s ease, background .22s ease, box-shadow .22s ease;
+  min-width: 0;
 }
 .task-item:hover,
 .draggable-task:hover {
@@ -551,6 +556,7 @@ select:focus {
 .group-title,
 .surface-title {
   color: var(--text);
+  word-break: break-word;
 }
 .task-name,
 .task-list-title,
@@ -580,6 +586,16 @@ select:focus {
 .group-count {
   padding: 8px 10px;
   border-radius: 999px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.panel-card,
+.panel-block,
+.metric-card,
+.surface-stat,
+.telemetry-pill {
+  min-width: 0;
 }
 .task-tag { color: var(--muted); }
 .task-tag.tag-e,
