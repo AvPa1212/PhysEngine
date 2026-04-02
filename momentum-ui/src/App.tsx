@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BrowserRouter,
   Navigate,
@@ -12,6 +12,15 @@ import SystemEnergyGauge from './components/SystemEnergyGauge';
 import TaskEnergyDisplay from './components/TaskEnergyDisplay';
 import DampingControls from './components/DampingControls';
 import EnergyAnalytics from './components/EnergyAnalytics';
+import {
+  clamp,
+  hydrateGroups,
+  hydrateTasks,
+  persistJson,
+  readJson,
+  type HydratedGroup,
+  type HydratedTask,
+} from './appState';
 import './index.css';
 
 const DEFAULT_GROUP_ID = 'grp-default';
@@ -65,7 +74,19 @@ const NAV_ITEMS: Array<{ key: PageKey; label: string; path: string; icon: string
 ];
 
 function toRange(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
+  return clamp(value, min, max);
+}
+
+function sparklinePath(data: number[], w: number, h: number) {
+  if (data.length < 2) return '';
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data, 0);
+  const range = max - min || 1;
+  return data.map((v, i) => {
+    const x = (i / (data.length - 1)) * w;
+    const y = h - ((v - min) / range) * h;
+    return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
 }
 
 function App() {
@@ -189,39 +210,17 @@ function Workspace() {
   }, [totalEnergy, totalEntropy, averageCollapse, activeEnergyDensity]);
 
   useEffect(() => {
-    try {
-      const savedGroups = localStorage.getItem('momentum_groups');
-      if (savedGroups) {
-        const parsed = JSON.parse(savedGroups);
-        if (Array.isArray(parsed)) {
-          const hydratedGroups = parsed.filter(
-            (g) => g && typeof g.id === 'string' && typeof g.name === 'string'
-          ) as TaskGroup[];
-          const withDefault = hydratedGroups.some((g) => g.id === DEFAULT_GROUP_ID)
-            ? hydratedGroups
-            : [DEFAULT_GROUP, ...hydratedGroups];
-          setGroups(withDefault);
-        }
-      }
-      const savedTasks = localStorage.getItem('momentum_tasks');
-      if (savedTasks) {
-        const parsed = JSON.parse(savedTasks);
-        if (Array.isArray(parsed)) {
-          const hydratedTasks = parsed
-            .filter((task) => task && task.title)
-            .map((task) => ({
-              id: String(task.id),
-              title: String(task.title),
-              difficulty: toRange(Number(task.difficulty) || 1, 1, 10),
-              groupId: task.groupId ? String(task.groupId) : DEFAULT_GROUP_ID,
-              createdAt: Number(task.createdAt) || Date.now(),
-              completed: Boolean(task.completed),
-            })) as Task[];
-          setTasks(hydratedTasks);
-          if (hydratedTasks[0]) setSelectedTaskId(hydratedTasks[0].id);
-        }
-      }
-    } catch { /* localStorage may be unavailable */ }
+    const savedGroups = readJson<HydratedGroup[]>('momentum_groups');
+    if (savedGroups) {
+      setGroups(hydrateGroups(savedGroups, DEFAULT_GROUP, DEFAULT_GROUP_ID));
+    }
+
+    const savedTasks = readJson<HydratedTask[]>('momentum_tasks');
+    if (savedTasks) {
+      const hydratedTasks = hydrateTasks(savedTasks, DEFAULT_GROUP_ID) as Task[];
+      setTasks(hydratedTasks);
+      if (hydratedTasks[0]) setSelectedTaskId(hydratedTasks[0].id);
+    }
   }, []);
 
   useEffect(() => {
@@ -250,11 +249,11 @@ function Workspace() {
   }, [notifications]);
 
   useEffect(() => {
-    try { localStorage.setItem('momentum_tasks', JSON.stringify(tasks)); } catch { }
+    persistJson('momentum_tasks', tasks);
   }, [tasks]);
 
   useEffect(() => {
-    try { localStorage.setItem('momentum_groups', JSON.stringify(groups)); } catch { }
+    persistJson('momentum_groups', groups);
   }, [groups]);
 
   useEffect(() => {
@@ -336,14 +335,14 @@ function Workspace() {
     navigate('/simulation');
   };
 
-  const focusSelectedTask = useCallback(() => {
+  const focusSelectedTask = () => {
     if (!selectedTask) return;
     navigate('/simulation');
     setSelectedTaskId(selectedTask.id);
     applyForce(selectedTask.id, forceVector.x, forceVector.y, forceVector.z);
-  }, [applyForce, forceVector.x, forceVector.y, forceVector.z, navigate, selectedTask]);
+  };
 
-  const pulseSelectedTask = useCallback(() => {
+  const pulseSelectedTask = () => {
     if (!selectedTask) return;
     applyForce(selectedTask.id, forceVector.x * 1.8, forceVector.y * 1.4, forceVector.z * 1.2);
     setNotifications((prev) => [...prev.slice(-4), {
@@ -351,9 +350,9 @@ function Workspace() {
       message: `⚛ Pulse injected into ${selectedTask.title}`,
       type: 'success',
     }]);
-  }, [applyForce, forceVector.x, forceVector.y, forceVector.z, selectedTask]);
+  };
 
-  const stabilizeSelectedTask = useCallback(() => {
+  const stabilizeSelectedTask = () => {
     if (!selectedTask) return;
     const state = selectedTaskState;
     const fx = -(state?.stressX ?? 0) * 0.8;
@@ -361,9 +360,9 @@ function Workspace() {
     const fz = -(state?.stressZ ?? 0) * 0.8;
     applyForce(selectedTask.id, fx, fy, fz);
     setMass(selectedTask.id, Math.max(0.5, massOverride));
-  }, [applyForce, massOverride, selectedTask, selectedTaskState, setMass]);
+  };
 
-  const hardCollapseSelectedTask = useCallback(() => {
+  const hardCollapseSelectedTask = () => {
     if (!selectedTask) return;
     collapse(selectedTask.id);
     setNotifications((prev) => [...prev.slice(-4), {
@@ -371,14 +370,14 @@ function Workspace() {
       message: `⚠ Forced collapse on ${selectedTask.title}`,
       type: 'critical',
     }]);
-  }, [collapse, selectedTask]);
+  };
 
-  const randomizeForceVector = useCallback(() => {
+  const randomizeForceVector = () => {
     const nextX = (Math.random() * 4 - 2).toFixed(2);
     const nextY = (Math.random() * 3 - 1.5).toFixed(2);
     const nextZ = (Math.random() * 2 - 1).toFixed(2);
     setForceVector({ x: Number(nextX), y: Number(nextY), z: Number(nextZ) });
-  }, []);
+  };
 
   const toggleComplete = (id: string) => {
     setTasks((prev) => prev.map((t) => {
@@ -449,19 +448,6 @@ function Workspace() {
     group,
     tasks: tasks.filter((task) => task.groupId === group.id),
   }));
-
-  // Sparkline path generator
-  const sparklinePath = (data: number[], w: number, h: number) => {
-    if (data.length < 2) return '';
-    const max = Math.max(...data, 1);
-    const min = Math.min(...data, 0);
-    const range = max - min || 1;
-    return data.map((v, i) => {
-      const x = (i / (data.length - 1)) * w;
-      const y = h - ((v - min) / range) * h;
-      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(' ');
-  };
 
   return (
     <div className={`app${isBurningOut ? ' burnout-shake' : ''}`}>

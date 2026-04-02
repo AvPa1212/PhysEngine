@@ -68,7 +68,7 @@ export function usePhysicsWorker() {
 
     let worker: Worker;
     try {
-      worker = new Worker(new URL('../workers/physicsWorker.ts', import.meta.url));
+      worker = new Worker(new URL('../workers/physicsWorker.ts', import.meta.url), { type: 'module' });
     } catch {
       // Workers unavailable – use sim mode immediately
       startSimMode();

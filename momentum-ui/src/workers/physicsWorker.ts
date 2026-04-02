@@ -20,8 +20,6 @@
 
 /* eslint-disable no-restricted-globals */
 
-declare function importScripts(...urls: string[]): void;
-
 const workerScope = self as any;
 let Module: any = null;
 const tasks = new Map<string, number>(); // taskId → WASM Task pointer
@@ -42,28 +40,19 @@ workerScope.onmessage = async (e: MessageEvent<any>) => {
 
     case 'INIT': {
       try {
-        // Import the Emscripten glue script (sets self.PhysEngine)
-        importScripts(data.wasmPath);
+        // Vite compiles workers as ES modules where importScripts() is unavailable.
+        // Instead, fetch the Emscripten glue JS and evaluate it via Function so the
+        // factory symbol (PhysEngine) lands on the worker's global scope.
         const resolveFactory = async () => {
-          const candidates = [
-            workerScope.PhysEngine,
-            workerScope.Module,
-            workerScope.createModule,
-            workerScope.MomentumCore,
-          ];
-          const globalFactory =
-            candidates.find((factory: unknown) => typeof factory === 'function') ||
-            candidates
-              .map((candidate: any) => candidate?.default)
-              .find((factory: unknown) => typeof factory === 'function') ||
-            null;
-
-          if (globalFactory) {
-            return globalFactory;
-          }
-
           const response = await fetch(data.wasmPath, { cache: 'no-store' });
+          if (!response.ok) {
+            throw new Error(`Failed to fetch WASM glue: HTTP ${response.status} ${data.wasmPath}`);
+          }
           const source = await response.text();
+
+          // Execute the Emscripten bundle in the worker scope so it registers
+          // its export name (PhysEngine) on globalThis / self.
+          // eslint-disable-next-line no-new-func
           const evaluatedFactory = new Function(
             `${source}\nreturn (typeof PhysEngine === "function" && PhysEngine) || (typeof Module === "function" && Module) || (typeof createModule === "function" && createModule) || (typeof MomentumCore === "function" && MomentumCore) || null;`
           )();
@@ -72,8 +61,22 @@ workerScope.onmessage = async (e: MessageEvent<any>) => {
             return evaluatedFactory;
           }
 
+          // Also check globals set as side-effects of the eval
+          const candidates = [
+            (workerScope as any).PhysEngine,
+            (workerScope as any).Module,
+            (workerScope as any).createModule,
+            (workerScope as any).MomentumCore,
+          ];
+          const globalFactory =
+            candidates.find((f: unknown) => typeof f === 'function') ||
+            candidates.map((c: any) => c?.default).find((f: unknown) => typeof f === 'function') ||
+            null;
+
+          if (globalFactory) return globalFactory;
+
           throw new Error(
-            `No callable Emscripten factory found. HTTP ${response.status} content-type=${response.headers.get('content-type') || 'unknown'}`
+            `No callable Emscripten factory found in ${data.wasmPath}`
           );
         };
 
