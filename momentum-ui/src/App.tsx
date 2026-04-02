@@ -868,3 +868,82 @@ function Workspace() {
               </div>
             </div>
           }/>
+
+          {/* ── GROUPS PAGE ── */}
+          <Route path="/groups" element={
+            <div className="groups-page">
+              <div className="groups-left">
+                <div className="panel-card">
+                  <h2>Create Group</h2>
+                  <form className="task-form" onSubmit={addGroup}>
+                    <input type="text" value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} placeholder="Group name" />
+                    <div className="inline-row">
+                      <label htmlFor="group-color">Color</label>
+                      <input id="group-color" type="color" value={newGroupColor} onChange={(e) => setNewGroupColor(e.target.value)} />
+                    </div>
+                    <button className="btn-primary" type="submit">Add Group</button>
+                  </form>
+                </div>
+                <div className="panel-card">
+                  <h2>Groups</h2>
+                  <div className="group-list">
+                    {groupedTasks.map(({ group, tasks: grouped }) => {
+                      const active = grouped.filter(t => !t.completed);
+                      const done = grouped.filter(t => t.completed);
+                      return (
+                        <div className="group-item" key={group.id}>
+                          <div className="group-item-left">
+                            <span className="swatch" style={{ background: group.color }}/>
+                            <div>
+                              <div className="group-title">{group.name}</div>
+                              <div className="group-stats">{active.length} active · {done.length} done</div>
+                            </div>
+                          </div>
+                          <button type="button" className="btn-sm danger" onClick={() => deleteGroup(group.id)} disabled={group.id === DEFAULT_GROUP_ID}>Delete</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+              <div className="groups-right">
+                <div className="panel-card full-height">
+                  <h2>Group Distribution</h2>
+                  <svg width="100%" height="300" viewBox="0 0 300 300">
+                    {(() => {
+                      const total = tasks.length || 1;
+                      let angle = -Math.PI / 2;
+                      return groupedTasks.filter(({ tasks: t }) => t.length > 0).map(({ group, tasks: t }) => {
+                        const slice = (t.length / total) * Math.PI * 2;
+                        const x1 = 150 + 100 * Math.cos(angle);
+                        const y1 = 150 + 100 * Math.sin(angle);
+                        angle += slice;
+                        const x2 = 150 + 100 * Math.cos(angle);
+                        const y2 = 150 + 100 * Math.sin(angle);
+                        const large = slice > Math.PI ? 1 : 0;
+                        const midAngle = angle - slice / 2;
+                        const lx = 150 + 120 * Math.cos(midAngle);
+                        const ly = 150 + 120 * Math.sin(midAngle);
+                        return (
+                          <g key={group.id}>
+                            <path d={`M150,150 L${x1},${y1} A100,100 0 ${large},1 ${x2},${y2} Z`} fill={group.color} opacity="0.8"/>
+                            <text x={lx} y={ly} textAnchor="middle" fontSize="10" fill="white" opacity="0.9">{group.name.slice(0,8)}</text>
+                          </g>
+                        );
+                      });
+                    })()}
+                    {tasks.length === 0 && <text x="150" y="155" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="12">No tasks yet</text>}
+                  </svg>
+                  <div className="group-legend">
+                    {groupedTasks.map(({ group, tasks: t }) => (
+                      <div key={group.id} className="legend-item">
+                        <span className="legend-dot" style={{ background: group.color }}/>
+                        <span>{group.name}</span>
+                        <span className="legend-count">{t.length}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          }/>
