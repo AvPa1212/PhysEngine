@@ -1,75 +1,77 @@
+/**
+ * @file EnergyEngine.cpp
+ * @brief Energy calculations and redistribution helpers used by the engine.
+ */
 #include "physics/EnergyEngine.hpp"
 #include "physics/Task.hpp"
 #include "core/Config.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <numeric>
 
+namespace {
+    double computeVelocityMagnitudeSquared(const Task& task) {
+        return task.velocity.x * task.velocity.x + task.velocity.y * task.velocity.y;
+    }
+
+    void setVelocityFromTargetKineticEnergy(Task& task, double targetKE) {
+        if (targetKE <= 0.0 || task.mass <= 0.0) {
+            task.velocity.x = 0.0;
+            task.velocity.y = 0.0;
+            return;
+        }
+
+        const double currentSpeed = std::sqrt(computeVelocityMagnitudeSquared(task));
+        const double targetSpeed = std::sqrt(2.0 * targetKE / task.mass);
+
+        if (currentSpeed > 0.001) {
+            task.velocity.x = (task.velocity.x / currentSpeed) * targetSpeed;
+            task.velocity.y = (task.velocity.y / currentSpeed) * targetSpeed;
+        } else {
+            // If the task is stationary, seed the injected energy on the X axis.
+            task.velocity.x = targetSpeed;
+            task.velocity.y = 0.0;
+        }
+    }
+}
+
 double EnergyEngine::computeKineticEnergy(const Task& task) {
-    double velMagSquared = task.velocity.x * task.velocity.x
-                         + task.velocity.y * task.velocity.y;
-    return 0.5 * task.mass * velMagSquared;
+    return 0.5 * task.mass * computeVelocityMagnitudeSquared(task);
 }
 
 double EnergyEngine::computePotentialEnergy(const Task& task) {
-    double height = task.position.y;
-    return task.mass * Config::GRAVITY_CONSTANT * height;
+    return task.mass * Config::GRAVITY_CONSTANT * task.position.y;
 }
 
 void EnergyEngine::calculateEnergy(Task& task) {
-    task.kineticEnergy   = std::min(computeKineticEnergy(task), Config::MAX_KINETIC_ENERGY);
+    task.kineticEnergy = std::min(computeKineticEnergy(task), Config::MAX_KINETIC_ENERGY);
     task.potentialEnergy = computePotentialEnergy(task);
-    task.totalEnergy     = task.kineticEnergy + task.potentialEnergy;
+    task.totalEnergy = task.kineticEnergy + task.potentialEnergy;
 }
 
 void EnergyEngine::injectEnergy(Task& task, double energyAmount) {
-    double currentKE = 0.5 * task.mass * (task.velocity.x * task.velocity.x
-                                         + task.velocity.y * task.velocity.y);
+    double currentKE = computeKineticEnergy(task);
     double targetKE = currentKE + energyAmount;
     targetKE = std::max(targetKE, 0.0);
     targetKE = std::min(targetKE, Config::MAX_KINETIC_ENERGY);
 
-    if (targetKE > 0.0) {
-        double targetVelMag = std::sqrt(2.0 * targetKE / task.mass);
-        double curVelMag = std::sqrt(task.velocity.x * task.velocity.x
-                                   + task.velocity.y * task.velocity.y);
-        if (curVelMag > 0.001) {
-            task.velocity.x = (task.velocity.x / curVelMag) * targetVelMag;
-            task.velocity.y = (task.velocity.y / curVelMag) * targetVelMag;
-        } else {
-            task.velocity.x = targetVelMag;
-            task.velocity.y = 0.0;
-        }
-    } else {
-        task.velocity.x = 0.0;
-        task.velocity.y = 0.0;
-    }
-
+    setVelocityFromTargetKineticEnergy(task, targetKE);
     calculateEnergy(task);
-    // Clamp after round-trip to guard against sqrt→square floating-point overshoot
+
+    // Guard against tiny floating-point overshoot after the round-trip.
     if (task.kineticEnergy > Config::MAX_KINETIC_ENERGY) {
         task.kineticEnergy = Config::MAX_KINETIC_ENERGY;
-        task.totalEnergy   = task.kineticEnergy + task.potentialEnergy;
+        task.totalEnergy = task.kineticEnergy + task.potentialEnergy;
     }
 }
 
 void EnergyEngine::dissipateEnergy(Task& task, double dampingCoefficient) {
-    double currentKE = 0.5 * task.mass * (task.velocity.x * task.velocity.x
-                                         + task.velocity.y * task.velocity.y);
+    double currentKE = computeKineticEnergy(task);
     double energyLoss = dampingCoefficient * currentKE * Config::TIME_STEP;
     double targetKE = std::max(currentKE - energyLoss, 0.0);
 
-    double curVelMag = std::sqrt(task.velocity.x * task.velocity.x
-                                + task.velocity.y * task.velocity.y);
-    if (targetKE > 0.0 && curVelMag > 0.001) {
-        double targetVelMag = std::sqrt(2.0 * targetKE / task.mass);
-        task.velocity.x = (task.velocity.x / curVelMag) * targetVelMag;
-        task.velocity.y = (task.velocity.y / curVelMag) * targetVelMag;
-    } else {
-        task.velocity.x = 0.0;
-        task.velocity.y = 0.0;
-    }
-
+    setVelocityFromTargetKineticEnergy(task, targetKE);
     calculateEnergy(task);
 }
 
@@ -136,6 +138,7 @@ double EnergyEngine::computeMeanEnergy(const std::vector<Task>& tasks) {
     if (tasks.empty()) {
         return 0.0;
     }
+
     double sum = 0.0;
     for (const auto& task : tasks) {
         sum += task.totalEnergy;
@@ -147,6 +150,7 @@ double EnergyEngine::computeEnergyStdDev(const std::vector<Task>& tasks) {
     if (tasks.empty()) {
         return 0.0;
     }
+
     double mean = computeMeanEnergy(tasks);
     double variance = 0.0;
     for (const auto& task : tasks) {
@@ -173,21 +177,12 @@ double EnergyEngine::computeForceScalingFactor(const Task& task) {
 }
 
 void EnergyEngine::injectEnergyRateLimited(Task& task, double amount, double& queue, double& lastTime, double maxRate) {
-    // lastTime is the current simulation time; elapsed is computed from Config::TIME_STEP
-    // On first call (lastTime == 0), treat elapsed as one time step
     double elapsed = Config::TIME_STEP;
     double budget = maxRate * elapsed;
-
-    // Total available to inject this step: budget from rate limit
-    double totalAvailable = budget;
-
-    // Combine new request with any queued remainder
     double totalRequested = amount + queue;
 
-    double injectable = std::min(totalRequested, totalAvailable);
+    double injectable = std::min(totalRequested, budget);
     injectable = std::max(injectable, 0.0);
-
-    // Remainder goes back to queue
     queue = std::max(0.0, totalRequested - injectable);
 
     if (injectable > 0.0) {

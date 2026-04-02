@@ -68,8 +68,11 @@ public:
 
         Vector2 totalForce = deadlineForce + frictionForce;
 
-        // Apply energy-based force scaling
-        double scalingFactor = EnergyEngine::computeForceScalingFactor(task);
+        // A freshly created task starts with zero stored energy. Use a neutral
+        // multiplier until the first energy pass so new tasks can still move.
+        double scalingFactor = task.totalEnergy == 0.0
+            ? 1.0
+            : EnergyEngine::computeForceScalingFactor(task);
         totalForce = totalForce * scalingFactor;
 
         return totalForce;

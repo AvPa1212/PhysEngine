@@ -1,3 +1,7 @@
+/**
+ * @file EnergyEngine.hpp
+ * @brief Energy bookkeeping, redistribution, and analytics for simulation tasks.
+ */
 #pragma once
 
 #include "math/Vector2.hpp"
@@ -13,7 +17,7 @@ public:
     static double computeKineticEnergy(const Task& task);
     static double computePotentialEnergy(const Task& task);
 
-    // Energy operations
+    // Direct energy operations
     static void injectEnergy(Task& task, double energyAmount);
     static void dissipateEnergy(Task& task, double dampingCoefficient);
     static void transferEnergy(Task& source, Task& target, double amount);
@@ -22,7 +26,7 @@ public:
     static double computeSystemEnergy(const std::vector<Task>& tasks);
     static void redistributeEnergy(const Task& completedTask, std::vector<Task>& remainingTasks);
 
-    // Analytics
+    // Analytics helpers for dashboards and tests
     static std::vector<Task*> sortByEnergy(std::vector<Task>& tasks);
     static double computeEnergyDrift(double initialEnergy, double currentEnergy);
     static double computeMeanEnergy(const std::vector<Task>& tasks);
@@ -32,6 +36,6 @@ public:
     // Force modulation
     static double computeForceScalingFactor(const Task& task);
 
-    // Rate-limited energy injection
+    // Rate-limited energy injection for simulation loops
     static void injectEnergyRateLimited(Task& task, double amount, double& queue, double& lastTime, double maxRate);
 };

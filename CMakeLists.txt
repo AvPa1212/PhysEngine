@@ -1,81 +1,100 @@
-﻿cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.20)
 project(PhysEngine CXX)
+
+if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# --- 1. SOURCE DISCOVERY ---
-file(GLOB_RECURSE LIB_SOURCES "src/*.cpp")
+# Re-run configure when new source files are added under src/.
+file(GLOB_RECURSE LIB_SOURCES CONFIGURE_DEPENDS "src/*.cpp")
 set(INC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-# --- 2. PLATFORM LOGIC (WEB vs DESKTOP) ---
-
 if(EMSCRIPTEN)
-    message(STATUS "MOMENTUM: Initializing WebAssembly Build Path...")
+    message(STATUS "MOMENTUM: Initializing WebAssembly build path...")
 
-    # Emscripten requires an executable target to generate .js and .wasm
     add_executable(MomentumCore ${LIB_SOURCES})
     target_include_directories(MomentumCore PUBLIC ${INC_DIR})
+    target_compile_options(MomentumCore PRIVATE -O3 -Wall)
 
-    # We use a single string for LINK_FLAGS to ensure Emscripten parses every -s flag correctly.
-    # --bind: Connects C++ and JS
-    # -sMODULARIZE=1: Wraps the engine in a Promise-based function
-    # -sEXPORT_NAME="PhysEngine": The name used in index.html
-    set_target_properties(MomentumCore PROPERTIES 
-        LINK_FLAGS "--bind -sALLOW_MEMORY_GROWTH=1 -sMODULARIZE=1 -sEXPORT_NAME=\"PhysEngine\" -sEXPORTED_RUNTIME_METHODS=[\"ccall\",\"cwrap\"] -O3"
-        SUFFIX ".js"
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/web_dist"
+    set_target_properties(
+        MomentumCore
+        PROPERTIES
+            LINK_FLAGS "--bind -sALLOW_MEMORY_GROWTH=1 -sMODULARIZE=1 -sEXPORT_NAME=\"PhysEngine\" -sEXPORTED_RUNTIME_METHODS=[\"ccall\",\"cwrap\"] -O3"
+            SUFFIX ".js"
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/web_dist"
     )
-
-    add_compile_options(-O3 -Wall)
-
 else()
-    message(STATUS "MOMENTUM: Initializing Desktop Shared Library Build Path...")
+    message(STATUS "MOMENTUM: Initializing desktop build path...")
 
-    # Static Library for desktop use (avoids DLL export issues on Windows)
-    add_library(MomentumCore STATIC ${LIB_SOURCES})
-    target_include_directories(MomentumCore PUBLIC ${INC_DIR})
-    target_link_libraries(MomentumCore PUBLIC m)
-
-    # Standard Linux/Windows Compile Options
     if(MSVC)
-        add_compile_options(/O2 /fp:precise /WX /W4 /D_CRT_SECURE_NO_WARNINGS)
+        set(MOMENTUM_COMMON_COMPILE_OPTIONS
+            /O2
+            /fp:precise
+            /WX
+            /W4
+            /D_CRT_SECURE_NO_WARNINGS
+        )
+        set(MOMENTUM_MATH_LIBS)
     else()
-        add_compile_options(-O3 -fPIC -Wall -Wextra -Werror)
+        set(MOMENTUM_COMMON_COMPILE_OPTIONS
+            -O3
+            -fPIC
+            -Wall
+            -Wextra
+            -Werror
+        )
+        set(MOMENTUM_MATH_LIBS m)
     endif()
 
-    # Desktop Output Management
+    function(momentum_apply_native_defaults target)
+        if(MOMENTUM_COMMON_COMPILE_OPTIONS)
+            target_compile_options(${target} PRIVATE ${MOMENTUM_COMMON_COMPILE_OPTIONS})
+        endif()
+    endfunction()
+
+    add_library(MomentumCore STATIC ${LIB_SOURCES})
+    target_include_directories(MomentumCore PUBLIC ${INC_DIR})
+    if(MOMENTUM_MATH_LIBS)
+        target_link_libraries(MomentumCore PUBLIC ${MOMENTUM_MATH_LIBS})
+    endif()
+    momentum_apply_native_defaults(MomentumCore)
+
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
-    # Desktop Executables & Testing
     add_executable(PhysEngine main.cpp)
-    add_executable(PhysicsTests tests/PhysicsTests.cpp)
-    add_executable(QuantumTests tests/QuantumTests.cpp)
-    add_executable(SerializationTests tests/SerializationTests.cpp)
-
     target_include_directories(PhysEngine PRIVATE ${INC_DIR})
-    target_include_directories(PhysicsTests PRIVATE ${INC_DIR})
-    target_include_directories(QuantumTests PRIVATE ${INC_DIR})
-    target_include_directories(SerializationTests PRIVATE ${INC_DIR})
-
     target_link_libraries(PhysEngine PRIVATE MomentumCore)
-    target_link_libraries(PhysicsTests PRIVATE MomentumCore)
-    target_link_libraries(QuantumTests PRIVATE MomentumCore)
-    target_link_libraries(SerializationTests PRIVATE MomentumCore)
+    momentum_apply_native_defaults(PhysEngine)
 
-    # Google Test for unit tests
+    add_executable(PhysicsTests tests/PhysicsTests.cpp)
+    target_include_directories(PhysicsTests PRIVATE ${INC_DIR})
+    target_link_libraries(PhysicsTests PRIVATE MomentumCore)
+    momentum_apply_native_defaults(PhysicsTests)
+
+    add_executable(QuantumTests tests/QuantumTests.cpp)
+    target_include_directories(QuantumTests PRIVATE ${INC_DIR})
+    target_link_libraries(QuantumTests PRIVATE MomentumCore)
+    momentum_apply_native_defaults(QuantumTests)
+
+    add_executable(SerializationTests tests/SerializationTests.cpp)
+    target_include_directories(SerializationTests PRIVATE ${INC_DIR})
+    target_link_libraries(SerializationTests PRIVATE MomentumCore)
+    momentum_apply_native_defaults(SerializationTests)
+
     include(FetchContent)
+
     FetchContent_Declare(
         googletest
         URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
     )
-    # Prevent overriding the parent project's compiler/linker settings on Windows
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(googletest)
 
-    # RapidCheck for property-based tests
     FetchContent_Declare(
         rapidcheck
         URL https://github.com/emil-e/rapidcheck/archive/refs/heads/master.zip
@@ -83,152 +102,130 @@ else()
     FetchContent_MakeAvailable(rapidcheck)
 
     enable_testing()
-
-    add_executable(ComplexTests tests/ComplexTests.cpp)
-    target_include_directories(ComplexTests PRIVATE ${INC_DIR})
-    target_link_libraries(ComplexTests PRIVATE GTest::gtest_main m)
-
-    add_executable(MatrixTests tests/MatrixTests.cpp)
-    target_include_directories(MatrixTests PRIVATE ${INC_DIR})
-    target_link_libraries(MatrixTests PRIVATE GTest::gtest_main m)
-
-    add_executable(ThermodynamicsEngineTests tests/ThermodynamicsEngineTests.cpp)
-    target_include_directories(ThermodynamicsEngineTests PRIVATE ${INC_DIR})
-    target_link_libraries(ThermodynamicsEngineTests PRIVATE GTest::gtest_main m)
-
-    add_executable(QuantumEngineTests tests/QuantumEngineTests.cpp)
-    target_include_directories(QuantumEngineTests PRIVATE ${INC_DIR})
-    target_link_libraries(QuantumEngineTests PRIVATE GTest::gtest_main m)
-
-    add_executable(ChaosEngineTests tests/ChaosEngineTests.cpp)
-    target_include_directories(ChaosEngineTests PRIVATE ${INC_DIR})
-    target_link_libraries(ChaosEngineTests PRIVATE GTest::gtest_main m)
-
-    add_executable(EulerIntegratorTests tests/EulerIntegratorTests.cpp)
-    target_include_directories(EulerIntegratorTests PRIVATE ${INC_DIR})
-    target_link_libraries(EulerIntegratorTests PRIVATE GTest::gtest_main m)
-
-    add_executable(Vector2Tests tests/Vector2Tests.cpp)
-    target_include_directories(Vector2Tests PRIVATE ${INC_DIR})
-    target_link_libraries(Vector2Tests PRIVATE GTest::gtest_main m)
-
-    add_executable(TaskTests tests/TaskTests.cpp)
-    target_include_directories(TaskTests PRIVATE ${INC_DIR})
-    target_link_libraries(TaskTests PRIVATE GTest::gtest_main m)
-
-    add_executable(ClassicalEngineTests tests/ClassicalEngineTests.cpp)
-    target_include_directories(ClassicalEngineTests PRIVATE ${INC_DIR})
-    target_link_libraries(ClassicalEngineTests PRIVATE GTest::gtest_main m)
-
-    add_executable(PhysicsPropertiesTest tests/PhysicsPropertiesTest.cpp)
-    target_include_directories(PhysicsPropertiesTest PRIVATE
-        ${INC_DIR}
-        ${rapidcheck_SOURCE_DIR}/extras/gtest/include
-    )
-    target_link_libraries(PhysicsPropertiesTest PRIVATE GTest::gtest_main rapidcheck m)
-
-    add_executable(RK4IntegrationTest tests/RK4IntegrationTest.cpp)
-    target_include_directories(RK4IntegrationTest PRIVATE ${INC_DIR})
-    target_link_libraries(RK4IntegrationTest PRIVATE GTest::gtest_main m)
-
-    add_executable(NumericalPropertiesTest tests/NumericalPropertiesTest.cpp)
-    target_include_directories(NumericalPropertiesTest PRIVATE
-        ${INC_DIR}
-        ${rapidcheck_SOURCE_DIR}/extras/gtest/include
-    )
-    target_link_libraries(NumericalPropertiesTest PRIVATE GTest::gtest_main rapidcheck m)
-
-    add_executable(SimulationEngineTests tests/SimulationEngineTests.cpp src/physics/EnergyEngine.cpp)
-    target_include_directories(SimulationEngineTests PRIVATE ${INC_DIR})
-    target_link_libraries(SimulationEngineTests PRIVATE GTest::gtest_main m)
-
-    add_executable(SimulationPropertiesTest tests/SimulationPropertiesTest.cpp src/physics/EnergyEngine.cpp)
-    target_include_directories(SimulationPropertiesTest PRIVATE
-        ${INC_DIR}
-        ${rapidcheck_SOURCE_DIR}/extras/gtest/include
-    )
-    target_link_libraries(SimulationPropertiesTest PRIVATE GTest::gtest_main rapidcheck m)
-
-    add_executable(BridgeTests tests/BridgeTests.cpp)
-    target_include_directories(BridgeTests PRIVATE ${INC_DIR})
-    target_link_libraries(BridgeTests PRIVATE MomentumCore GTest::gtest_main)
-
-    add_executable(RoundTripPropertiesTest tests/RoundTripPropertiesTest.cpp)
-    target_include_directories(RoundTripPropertiesTest PRIVATE
-        ${INC_DIR}
-        ${rapidcheck_SOURCE_DIR}/extras/gtest/include
-    )
-    target_link_libraries(RoundTripPropertiesTest PRIVATE MomentumCore GTest::gtest_main rapidcheck)
-    target_compile_options(RoundTripPropertiesTest PRIVATE -Wno-sign-compare)
-
-    add_executable(PausePropertiesTest tests/PausePropertiesTest.cpp src/physics/EnergyEngine.cpp)
-    target_include_directories(PausePropertiesTest PRIVATE
-        ${INC_DIR}
-        ${rapidcheck_SOURCE_DIR}/extras/gtest/include
-    )
-    target_link_libraries(PausePropertiesTest PRIVATE GTest::gtest_main rapidcheck m)
-
-    add_executable(InvariantPropertiesTest tests/InvariantPropertiesTest.cpp)
-    target_include_directories(InvariantPropertiesTest PRIVATE
-        ${INC_DIR}
-        ${rapidcheck_SOURCE_DIR}/extras/gtest/include
-    )
-    target_link_libraries(InvariantPropertiesTest PRIVATE GTest::gtest_main rapidcheck m)
-
-    add_executable(StabilityPropertiesTest tests/StabilityPropertiesTest.cpp)
-    target_include_directories(StabilityPropertiesTest PRIVATE
-        ${INC_DIR}
-        ${rapidcheck_SOURCE_DIR}/extras/gtest/include
-    )
-    target_link_libraries(StabilityPropertiesTest PRIVATE GTest::gtest_main rapidcheck m)
-
-    add_executable(IntegrationTests tests/IntegrationTests.cpp src/physics/EnergyEngine.cpp)
-    target_include_directories(IntegrationTests PRIVATE ${INC_DIR})
-    target_link_libraries(IntegrationTests PRIVATE MomentumCore GTest::gtest_main)
-
-    add_executable(BenchmarkTests tests/BenchmarkTests.cpp src/physics/EnergyEngine.cpp)
-    target_include_directories(BenchmarkTests PRIVATE ${INC_DIR})
-    target_link_libraries(BenchmarkTests PRIVATE MomentumCore GTest::gtest_main)
-
-    add_executable(EnergyEngineTests tests/EnergyEngineTests.cpp src/physics/EnergyEngine.cpp)
-    target_include_directories(EnergyEngineTests PRIVATE ${INC_DIR})
-    target_link_libraries(EnergyEngineTests PRIVATE GTest::gtest_main m)
-
-    add_executable(EnergyPropertiesTest tests/EnergyPropertiesTest.cpp src/physics/EnergyEngine.cpp)
-    target_include_directories(EnergyPropertiesTest PRIVATE
-        ${INC_DIR}
-        ${rapidcheck_SOURCE_DIR}/extras/gtest/include
-    )
-    target_link_libraries(EnergyPropertiesTest PRIVATE GTest::gtest_main rapidcheck m)
-
-    add_executable(EulerVsRK4BenchmarkTest tests/EulerVsRK4BenchmarkTest.cpp)
-    target_include_directories(EulerVsRK4BenchmarkTest PRIVATE ${INC_DIR})
-    target_link_libraries(EulerVsRK4BenchmarkTest PRIVATE MomentumCore GTest::gtest_main)
-
     include(GoogleTest)
-    gtest_discover_tests(ComplexTests)
-    gtest_discover_tests(MatrixTests)
-    gtest_discover_tests(ThermodynamicsEngineTests)
-    gtest_discover_tests(QuantumEngineTests)
-    gtest_discover_tests(ChaosEngineTests)
-    gtest_discover_tests(EulerIntegratorTests)
-    gtest_discover_tests(Vector2Tests)
-    gtest_discover_tests(TaskTests)
-    gtest_discover_tests(ClassicalEngineTests)
-    gtest_discover_tests(PhysicsPropertiesTest)
-    gtest_discover_tests(RK4IntegrationTest)
-    gtest_discover_tests(NumericalPropertiesTest)
-    gtest_discover_tests(SimulationEngineTests)
-    gtest_discover_tests(SimulationPropertiesTest)
-    gtest_discover_tests(BridgeTests)
-    gtest_discover_tests(RoundTripPropertiesTest)
-    gtest_discover_tests(PausePropertiesTest)
-    gtest_discover_tests(InvariantPropertiesTest)
-    gtest_discover_tests(StabilityPropertiesTest)
-    gtest_discover_tests(IntegrationTests)
-    gtest_discover_tests(BenchmarkTests)
-    gtest_discover_tests(EnergyEngineTests)
-    gtest_discover_tests(EnergyPropertiesTest)
-    gtest_discover_tests(EulerVsRK4BenchmarkTest)
 
+    function(momentum_add_test target)
+        set(options USE_CORE USE_RAPIDCHECK)
+        set(one_value_args)
+        set(multi_value_args SOURCES EXTRA_INCLUDES EXTRA_LIBS EXTRA_SOURCES EXTRA_COMPILE_OPTIONS)
+        cmake_parse_arguments(MAT "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN})
+
+        add_executable(${target} ${MAT_SOURCES} ${MAT_EXTRA_SOURCES})
+        target_include_directories(${target} PRIVATE ${INC_DIR} ${MAT_EXTRA_INCLUDES})
+        target_link_libraries(${target} PRIVATE GTest::gtest_main ${MAT_EXTRA_LIBS})
+
+        if(MAT_USE_CORE)
+            target_link_libraries(${target} PRIVATE MomentumCore)
+        elseif(MOMENTUM_MATH_LIBS)
+            target_link_libraries(${target} PRIVATE ${MOMENTUM_MATH_LIBS})
+        endif()
+
+        if(MAT_USE_RAPIDCHECK)
+            target_include_directories(${target} PRIVATE ${rapidcheck_SOURCE_DIR}/extras/gtest/include)
+            target_link_libraries(${target} PRIVATE rapidcheck)
+        endif()
+
+        momentum_apply_native_defaults(${target})
+
+        if(MAT_EXTRA_COMPILE_OPTIONS)
+            target_compile_options(${target} PRIVATE ${MAT_EXTRA_COMPILE_OPTIONS})
+        endif()
+
+        gtest_discover_tests(${target})
+    endfunction()
+
+    momentum_add_test(ComplexTests SOURCES tests/ComplexTests.cpp)
+    momentum_add_test(MatrixTests SOURCES tests/MatrixTests.cpp)
+    momentum_add_test(ThermodynamicsEngineTests SOURCES tests/ThermodynamicsEngineTests.cpp)
+    momentum_add_test(QuantumEngineTests SOURCES tests/QuantumEngineTests.cpp)
+    momentum_add_test(ChaosEngineTests SOURCES tests/ChaosEngineTests.cpp)
+    momentum_add_test(
+        EulerIntegratorTests
+        SOURCES tests/EulerIntegratorTests.cpp
+        EXTRA_SOURCES src/physics/EnergyEngine.cpp
+    )
+    momentum_add_test(Vector2Tests SOURCES tests/Vector2Tests.cpp)
+    momentum_add_test(TaskTests SOURCES tests/TaskTests.cpp)
+    momentum_add_test(
+        ClassicalEngineTests
+        SOURCES tests/ClassicalEngineTests.cpp
+        EXTRA_SOURCES src/physics/EnergyEngine.cpp
+    )
+    momentum_add_test(
+        PhysicsPropertiesTest
+        USE_RAPIDCHECK
+        SOURCES tests/PhysicsPropertiesTest.cpp
+        EXTRA_SOURCES src/physics/EnergyEngine.cpp
+    )
+    momentum_add_test(
+        RK4IntegrationTest
+        SOURCES tests/RK4IntegrationTest.cpp
+        EXTRA_SOURCES src/physics/EnergyEngine.cpp
+    )
+    momentum_add_test(
+        NumericalPropertiesTest
+        USE_RAPIDCHECK
+        SOURCES tests/NumericalPropertiesTest.cpp
+        EXTRA_SOURCES src/physics/EnergyEngine.cpp
+    )
+    momentum_add_test(
+        SimulationEngineTests
+        SOURCES tests/SimulationEngineTests.cpp
+        EXTRA_SOURCES src/physics/EnergyEngine.cpp
+    )
+    momentum_add_test(
+        SimulationPropertiesTest
+        USE_RAPIDCHECK
+        SOURCES tests/SimulationPropertiesTest.cpp
+        EXTRA_SOURCES src/physics/EnergyEngine.cpp
+    )
+    momentum_add_test(BridgeTests USE_CORE SOURCES tests/BridgeTests.cpp)
+    momentum_add_test(
+        RoundTripPropertiesTest
+        USE_CORE
+        USE_RAPIDCHECK
+        SOURCES tests/RoundTripPropertiesTest.cpp
+        EXTRA_COMPILE_OPTIONS $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wno-sign-compare>
+    )
+    momentum_add_test(
+        PausePropertiesTest
+        USE_RAPIDCHECK
+        SOURCES tests/PausePropertiesTest.cpp
+        EXTRA_SOURCES src/physics/EnergyEngine.cpp
+    )
+    momentum_add_test(
+        InvariantPropertiesTest
+        USE_RAPIDCHECK
+        SOURCES tests/InvariantPropertiesTest.cpp
+    )
+    momentum_add_test(
+        StabilityPropertiesTest
+        USE_RAPIDCHECK
+        SOURCES tests/StabilityPropertiesTest.cpp
+        EXTRA_SOURCES src/physics/EnergyEngine.cpp
+    )
+    momentum_add_test(
+        IntegrationTests
+        USE_CORE
+        SOURCES tests/IntegrationTests.cpp
+        EXTRA_SOURCES src/physics/EnergyEngine.cpp
+    )
+    momentum_add_test(
+        BenchmarkTests
+        USE_CORE
+        SOURCES tests/BenchmarkTests.cpp
+        EXTRA_SOURCES src/physics/EnergyEngine.cpp
+    )
+    momentum_add_test(
+        EnergyEngineTests
+        SOURCES tests/EnergyEngineTests.cpp
+        EXTRA_SOURCES src/physics/EnergyEngine.cpp
+    )
+    momentum_add_test(
+        EnergyPropertiesTest
+        USE_RAPIDCHECK
+        SOURCES tests/EnergyPropertiesTest.cpp
+        EXTRA_SOURCES src/physics/EnergyEngine.cpp
+    )
+    momentum_add_test(EulerVsRK4BenchmarkTest USE_CORE SOURCES tests/EulerVsRK4BenchmarkTest.cpp)
 endif()
