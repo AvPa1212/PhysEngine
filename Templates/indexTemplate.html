@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Momentum</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="./styles.css"/>
+</head>
+<body class="bg-black text-white overflow-hidden">
+
+  <div id="app" class="h-screen w-screen flex flex-col">
+
+    <!-- Navbar -->
+    <div id="navbar" class="h-12 border-b border-gray-800 flex items-center px-4 justify-between">
+      <div class="flex gap-2">
+        <button class="btn">Add Task</button>
+        <button class="btn">Pause</button>
+      </div>
+      <div id="taskCount">Tasks: 0</div>
+    </div>
+
+    <!-- Main Layout -->
+    <div class="flex flex-1 overflow-hidden">
+
+      <!-- Sidebar -->
+      <div id="sidebar" class="w-64 border-r border-gray-800 p-4">
+        <h2 class="text-sm text-gray-400 mb-2">Controls</h2>
+        <div id="controls"></div>
+      </div>
+
+      <!-- Canvas Area -->
+      <div class="flex-1 relative">
+        <canvas id="simulationCanvas" class="w-full h-full"></canvas>
+      </div>
+
+      <!-- Right Panel -->
+      <div id="taskPanel" class="w-80 border-l border-gray-800 p-4 overflow-y-auto">
+        <h2 class="text-sm text-gray-400 mb-2">Tasks</h2>
+        <div id="taskList"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

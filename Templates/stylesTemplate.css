@@ -1,0 +1,18 @@
+:root {
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #111111;
+  --border: #1f1f1f;
+  --accent: #3b82f6;
+}
+
+.btn {
+  @apply px-3 py-1 text-sm bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-md transition;
+}
+
+.panel {
+  @apply bg-gray-950 border border-gray-800 rounded-lg shadow-lg;
+}
+
+.card {
+  @apply p-3 bg-gray-900 border border-gray-800 rounded-md mb-2;
+}
