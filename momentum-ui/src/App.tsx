@@ -8,6 +8,10 @@ import {
   useNavigate,
 } from 'react-router-dom';
 import { usePhysicsWorker } from './hooks/usePhysicsWorker';
+import SystemEnergyGauge from './components/SystemEnergyGauge';
+import TaskEnergyDisplay from './components/TaskEnergyDisplay';
+import DampingControls from './components/DampingControls';
+import EnergyAnalytics from './components/EnergyAnalytics';
 import './index.css';
 
 const DEFAULT_GROUP_ID = 'grp-default';
@@ -33,6 +37,17 @@ type Notification = {
   id: string;
   message: string;
   type: 'warning' | 'critical';
+};
+
+type WorkerTaskState = {
+  stressX: number;
+  stressY: number;
+  stressZ: number;
+  entropy: number;
+  posX: number;
+  posY: number;
+  collapseProbability: number;
+  stepCount: number;
 };
 
 const DEFAULT_GROUP: TaskGroup = {
@@ -82,6 +97,8 @@ function Workspace() {
   const [newTaskDifficulty, setNewTaskDifficulty] = useState(5);
   const [newTaskGroupId, setNewTaskGroupId] = useState(DEFAULT_GROUP_ID);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [pausedTaskStates, setPausedTaskStates] = useState<Record<string, WorkerTaskState> | null>(null);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupColor, setNewGroupColor] = useState('#4f8ef7');
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
@@ -92,6 +109,8 @@ function Workspace() {
     CHAOS: false,
     QUANTUM: false,
   });
+  const [isDampingEnabled, setIsDampingEnabled] = useState(false);
+  const [dampingCoefficient, setDampingCoefficient] = useState(0.1);
 
   const activeTaskIdsRef = useRef<Set<string>>(new Set());
   const taskMassRef = useRef<Record<string, number>>({});
@@ -103,6 +122,8 @@ function Workspace() {
 
   const selectedTask =
     tasks.find((task) => task.id === selectedTaskId) ?? tasks[0] ?? null;
+
+  const visibleTaskStates = isPaused && pausedTaskStates ? pausedTaskStates : taskStates;
 
   const totalEnergy = useMemo(
     () => tasks.reduce((sum, task) => sum + task.difficulty * 8.6, 0),
@@ -116,8 +137,8 @@ function Workspace() {
     [tasks]
   );
   const totalEntropy = useMemo(
-    () => Object.values(taskStates).reduce((sum, state) => sum + (state.entropy || 0), 0),
-    [taskStates]
+    () => Object.values(visibleTaskStates).reduce((sum, state) => sum + (state.entropy || 0), 0),
+    [visibleTaskStates]
   );
 
   useEffect(() => {
@@ -313,6 +334,22 @@ function Workspace() {
     navigate('/simulation');
   };
 
+  const openQuickAdd = () => {
+    setIsQuickAddOpen(true);
+    navigate('/simulation');
+  };
+
+  const togglePause = () => {
+    setIsPaused((prev) => {
+      if (prev) {
+        setPausedTaskStates(null);
+        return false;
+      }
+      setPausedTaskStates(taskStates as Record<string, WorkerTaskState>);
+      return true;
+    });
+  };
+
   const patchTask = (id: string, patch: Partial<Omit<Task, 'id' | 'createdAt'>>) => {
     setTasks((prev) =>
       prev.map((task) => {
@@ -417,9 +454,18 @@ function Workspace() {
           ))}
         </div>
         <div className="topbar-right">
+          <button className="btn-sm" type="button" onClick={openQuickAdd}>
+            Add Task
+          </button>
+          <button className="btn-sm" type="button" onClick={togglePause}>
+            {isPaused ? 'Resume' : 'Pause'}
+          </button>
           <div className="sim-badge">
             <div className="sim-dot"></div>
             LIVE
+          </div>
+          <div className="sim-badge" aria-label="task count">
+            Tasks: {tasks.length}
           </div>
           <button
             className="btn-sm"
@@ -468,6 +514,7 @@ function Workspace() {
                           onChange={(e) => setNewTaskTitle(e.target.value)}
                           placeholder="Task title"
                           aria-label="Task title"
+                          autoFocus
                         />
                         <div className="inline-row">
                           <label htmlFor="quick-task-group">Group</label>
@@ -501,7 +548,7 @@ function Workspace() {
                       </div>
                     )}
                     {tasks.map((task) => {
-                      const state = taskStates[task.id];
+                      const state = visibleTaskStates[task.id];
                       const energy = (state?.entropy ?? task.difficulty) * 12;
                       const group = groupMap[task.groupId] ?? DEFAULT_GROUP;
                       return (
@@ -579,7 +626,7 @@ function Workspace() {
                     <line x1="50" y1="470" x2="760" y2="470" stroke="rgba(255,255,255,0.08)" />
                     <line x1="50" y1="60" x2="50" y2="470" stroke="rgba(255,255,255,0.08)" />
                     {tasks.map((task, index) => {
-                      const state = taskStates[task.id];
+                      const state = visibleTaskStates[task.id];
                       const group = groupMap[task.groupId] ?? DEFAULT_GROUP;
                       const fallbackX = 130 + ((index * 97) % 560);
                       const fallbackY = 130 + ((index * 63) % 280);
@@ -648,6 +695,9 @@ function Workspace() {
                         <div className="metric-lbl">Stability</div>
                       </div>
                     </div>
+                    <div style={{ marginTop: 8 }}>
+                      <SystemEnergyGauge systemEnergy={totalEnergy} maxEnergy={Math.max(totalEnergy, 100)} />
+                    </div>
                   </div>
 
                   <div className="panel-block">
@@ -669,6 +719,15 @@ function Workspace() {
                         </button>
                       ))}
                     </div>
+                    <DampingControls
+                      isDampingEnabled={isDampingEnabled}
+                      dampingCoefficient={dampingCoefficient}
+                      onEnableDamping={(coeff) => {
+                        setIsDampingEnabled(true);
+                        setDampingCoefficient(coeff);
+                      }}
+                      onDisableDamping={() => setIsDampingEnabled(false)}
+                    />
                   </div>
 
                   {selectedTask && (
@@ -684,11 +743,19 @@ function Workspace() {
                       </div>
                       <div className="detail-row">
                         <span className="detail-key">ENTROPY</span>
-                        <span className="detail-val">{(taskStates[selectedTask.id]?.entropy ?? 0).toFixed(2)}</span>
+                        <span className="detail-val">{(visibleTaskStates[selectedTask.id]?.entropy ?? 0).toFixed(2)}</span>
                       </div>
                       <div className="detail-row">
                         <span className="detail-key">HEAT</span>
                         <span className="detail-val">{heatDisplay}K</span>
+                      </div>
+                      <div style={{ marginTop: 8 }}>
+                        <TaskEnergyDisplay
+                          taskId={selectedTask.id}
+                          kineticEnergy={(visibleTaskStates[selectedTask.id]?.entropy ?? 0) * 6}
+                          potentialEnergy={selectedTask.difficulty * 4}
+                          totalEnergy={(visibleTaskStates[selectedTask.id]?.entropy ?? 0) * 6 + selectedTask.difficulty * 4}
+                        />
                       </div>
                     </div>
                   )}
@@ -903,6 +970,7 @@ function Workspace() {
                     ))}
                   </ul>
                 </div>
+                <EnergyAnalytics meanEnergy={0} stdDevEnergy={0} />
               </div>
             }
           />

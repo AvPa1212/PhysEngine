@@ -1,9 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+
+type TaskEnergyState = {
+  kineticEnergy: number;
+  potentialEnergy: number;
+  totalEnergy: number;
+};
 
 export function useMomentum() {
   const [engine, setEngine] = useState<unknown>(null);
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [taskEnergies, setTaskEnergies] = useState<Record<string, TaskEnergyState>>({});
+  const [systemEnergy, setSystemEnergy] = useState<number>(0);
+  const [isDampingEnabled, setIsDampingEnabled] = useState<boolean>(false);
+  const [dampingCoefficient, setDampingCoefficient] = useState<number>(0.1);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,5 +105,75 @@ export function useMomentum() {
     };
   }, []);
 
-  return { engine, isReady, error };
+  // Query energy values for a task by its pointer
+  const getTaskEnergy = useCallback((taskPtr: number): TaskEnergyState => {
+    const mod = engine as any;
+    if (!mod || !isReady) {
+      return { kineticEnergy: 0, potentialEnergy: 0, totalEnergy: 0 };
+    }
+    return {
+      kineticEnergy: typeof mod.Energy_GetKinetic === 'function' ? mod.Energy_GetKinetic(taskPtr) : 0,
+      potentialEnergy: typeof mod.Energy_GetPotential === 'function' ? mod.Energy_GetPotential(taskPtr) : 0,
+      totalEnergy: typeof mod.Energy_GetTotal === 'function' ? mod.Energy_GetTotal(taskPtr) : 0,
+    };
+  }, [engine, isReady]);
+
+  // Update energy state for a set of task pointers (keyed by taskId)
+  const refreshTaskEnergies = useCallback((taskPtrs: Record<string, number>) => {
+    const mod = engine as any;
+    if (!mod || !isReady) return;
+    const updated: Record<string, TaskEnergyState> = {};
+    for (const [taskId, ptr] of Object.entries(taskPtrs)) {
+      updated[taskId] = {
+        kineticEnergy: typeof mod.Energy_GetKinetic === 'function' ? mod.Energy_GetKinetic(ptr) : 0,
+        potentialEnergy: typeof mod.Energy_GetPotential === 'function' ? mod.Energy_GetPotential(ptr) : 0,
+        totalEnergy: typeof mod.Energy_GetTotal === 'function' ? mod.Energy_GetTotal(ptr) : 0,
+      };
+    }
+    setTaskEnergies(updated);
+  }, [engine, isReady]);
+
+  // Query total system energy
+  const getSystemEnergy = useCallback((enginePtr: number): number => {
+    const mod = engine as any;
+    if (!mod || !isReady) return 0;
+    if (typeof mod.System_GetTotalEnergy === 'function') {
+      const val = mod.System_GetTotalEnergy(enginePtr);
+      setSystemEnergy(val);
+      return val;
+    }
+    return 0;
+  }, [engine, isReady]);
+
+  // Inject energy into a task
+  const injectEnergy = useCallback((taskPtr: number, energyAmount: number): void => {
+    const mod = engine as any;
+    if (!mod || !isReady) return;
+    if (typeof mod.Energy_Inject === 'function') {
+      mod.Energy_Inject(taskPtr, energyAmount);
+    }
+  }, [engine, isReady]);
+
+  // Enable damping on the engine
+  const enableDamping = useCallback((enginePtr: number, coefficient: number): void => {
+    const mod = engine as any;
+    if (!mod || !isReady) return;
+    if (typeof mod.System_EnableDamping === 'function') {
+      mod.System_EnableDamping(enginePtr, coefficient);
+    }
+    setIsDampingEnabled(true);
+    setDampingCoefficient(coefficient);
+  }, [engine, isReady]);
+
+  // Disable damping on the engine
+  const disableDamping = useCallback((enginePtr: number): void => {
+    const mod = engine as any;
+    if (!mod || !isReady) return;
+    if (typeof mod.System_DisableDamping === 'function') {
+      mod.System_DisableDamping(enginePtr);
+    }
+    setIsDampingEnabled(false);
+  }, [engine, isReady]);
+
+  return { engine, isReady, error, taskEnergies, systemEnergy, isDampingEnabled, dampingCoefficient, getTaskEnergy, refreshTaskEnergies, getSystemEnergy, injectEnergy, enableDamping, disableDamping };
 }

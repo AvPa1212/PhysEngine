@@ -102,8 +102,14 @@ workerScope.onmessage = async (e: MessageEvent<any>) => {
 
     case 'CREATE_TASK': {
       if (!Module) break;
-      const ptr = Module.Task_Create();
-      if (data.mass != null) Module.Task_SetMass(ptr, data.mass);
+      const hasCreateWithParams = typeof Module.Task_CreateWithParams === 'function';
+      const mass = data.mass ?? 1.0;
+      const deadline = data.deadline ?? 10.0;
+      const urgency = data.urgency ?? 100.0;
+      const ptr = hasCreateWithParams
+        ? Module.Task_CreateWithParams(mass, deadline, urgency)
+        : Module.Task_Create();
+      if (!hasCreateWithParams && data.mass != null) Module.Task_SetMass(ptr, data.mass);
       if (data.stressX != null || data.stressY != null || data.stressZ != null) {
         const sx = data.stressX ?? 0;
         const sy = data.stressY ?? 0;
