@@ -98,3 +98,74 @@ TEST(TaskTest, AllFieldsAreReadWriteAccessible) {
     EXPECT_DOUBLE_EQ(t.acceleration.y, -0.5);
     EXPECT_EQ(t.stepCount, 42);
 }
+
+// ---- Energy field initialization (Requirements 9.4, 9.5) ----
+
+TEST(TaskTest, DefaultKineticEnergyIsZero) {
+    Task t;
+    EXPECT_DOUBLE_EQ(t.kineticEnergy, 0.0);
+}
+
+TEST(TaskTest, DefaultPotentialEnergyIsZero) {
+    Task t;
+    EXPECT_DOUBLE_EQ(t.potentialEnergy, 0.0);
+}
+
+TEST(TaskTest, DefaultTotalEnergyIsZero) {
+    Task t;
+    EXPECT_DOUBLE_EQ(t.totalEnergy, 0.0);
+}
+
+// Setting classical fields does not affect energy fields (Requirement 9.5)
+
+TEST(TaskTest, SettingPositionDoesNotAffectEnergyFields) {
+    Task t;
+    t.position = {5.0, 10.0};
+    EXPECT_DOUBLE_EQ(t.kineticEnergy, 0.0);
+    EXPECT_DOUBLE_EQ(t.potentialEnergy, 0.0);
+    EXPECT_DOUBLE_EQ(t.totalEnergy, 0.0);
+}
+
+TEST(TaskTest, SettingVelocityDoesNotAffectEnergyFields) {
+    Task t;
+    t.velocity = {3.0, 4.0};
+    EXPECT_DOUBLE_EQ(t.kineticEnergy, 0.0);
+    EXPECT_DOUBLE_EQ(t.potentialEnergy, 0.0);
+    EXPECT_DOUBLE_EQ(t.totalEnergy, 0.0);
+}
+
+TEST(TaskTest, SettingMassDoesNotAffectEnergyFields) {
+    Task t;
+    t.mass = 7.5;
+    EXPECT_DOUBLE_EQ(t.kineticEnergy, 0.0);
+    EXPECT_DOUBLE_EQ(t.potentialEnergy, 0.0);
+    EXPECT_DOUBLE_EQ(t.totalEnergy, 0.0);
+}
+
+// Energy fields can be set independently without affecting classical fields (Requirement 9.5)
+
+TEST(TaskTest, SettingEnergyFieldsDoesNotAffectClassicalFields) {
+    Task t;
+    t.kineticEnergy = 12.5;
+    t.potentialEnergy = -3.0;
+    t.totalEnergy = 9.5;
+
+    EXPECT_DOUBLE_EQ(t.position.x, 0.0);
+    EXPECT_DOUBLE_EQ(t.position.y, 0.0);
+    EXPECT_DOUBLE_EQ(t.velocity.x, 0.0);
+    EXPECT_DOUBLE_EQ(t.velocity.y, 0.0);
+    EXPECT_DOUBLE_EQ(t.acceleration.x, 0.0);
+    EXPECT_DOUBLE_EQ(t.acceleration.y, 0.0);
+    EXPECT_DOUBLE_EQ(t.mass, 1.0);
+}
+
+TEST(TaskTest, EnergyFieldsAreIndependentlyReadWrite) {
+    Task t;
+    t.kineticEnergy = 5.0;
+    t.potentialEnergy = 3.0;
+    t.totalEnergy = 8.0;
+
+    EXPECT_DOUBLE_EQ(t.kineticEnergy, 5.0);
+    EXPECT_DOUBLE_EQ(t.potentialEnergy, 3.0);
+    EXPECT_DOUBLE_EQ(t.totalEnergy, 8.0);
+}

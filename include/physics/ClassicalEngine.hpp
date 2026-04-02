@@ -1,6 +1,8 @@
 #pragma once
 #include "Task.hpp"
 #include "core/Config.hpp"
+#include "physics/EnergyEngine.hpp"
+#include <cmath>
 
 class ClassicalEngine {
 public:
@@ -24,11 +26,28 @@ public:
             frictionForce = dir * (-task.kineticFriction * task.mass * Config::GRAVITY_CONSTANT);
         }
 
-        return deadlineForce + frictionForce;
+        Vector2 totalForce = deadlineForce + frictionForce;
+
+        // Apply energy-based force scaling
+        double scalingFactor = EnergyEngine::computeForceScalingFactor(task);
+        totalForce = totalForce * scalingFactor;
+
+        return totalForce;
     }
 
     static void integrateRK4(Task& task) {
-        const double dt = Config::TIME_STEP;
+        integrateRK4(task, Config::TIME_STEP);
+    }
+
+    static void integrateRK4(Task& task, double dt) {
+        if (!(task.mass > 0.0) || !std::isfinite(task.mass)) {
+            task.acceleration = {0.0, 0.0};
+            return;
+        }
+        if (!(dt > 0.0) || !std::isfinite(dt)) {
+            return;
+        }
+
         const double dt_half = dt * 0.5;
         const double dt_sixth = dt / 6.0;
         // Precompute inverse mass once — division is expensive; the four
@@ -54,6 +73,14 @@ public:
         task.position += (v1 + v2 * 2.0 + v3 * 2.0 + v4) * dt_sixth;
         task.velocity += (a1 + a2 * 2.0 + a3 * 2.0 + a4) * dt_sixth;
         task.acceleration = a1;
+
+        if (!std::isfinite(task.position.x) || !std::isfinite(task.position.y) ||
+            !std::isfinite(task.velocity.x) || !std::isfinite(task.velocity.y) ||
+            !std::isfinite(task.acceleration.x) || !std::isfinite(task.acceleration.y)) {
+            task.position = {0.0, 0.0};
+            task.velocity = {0.0, 0.0};
+            task.acceleration = {0.0, 0.0};
+        }
 
         task.deadlineTime -= dt;
         task.stepCount++;

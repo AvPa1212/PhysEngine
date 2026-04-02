@@ -17,6 +17,14 @@ struct Task {
     double deadlineTime = 10.0;
     double urgencyConstant = 100.0;
 
+    // Energy-Based System Fields
+    // kineticEnergy: KE = 0.5 * mass * |velocity|^2  (always >= 0)
+    // potentialEnergy: PE = mass * g * height, where height = position.y (can be negative)
+    // totalEnergy: E_total = KE + PE (maintained by EnergyEngine after each integration step)
+    double kineticEnergy = 0.0;
+    double potentialEnergy = 0.0;
+    double totalEnergy = 0.0;
+
     // Quantum
     std::array<Complex, Config::QUANTUM_DIM> psi = {
         Complex{1.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}

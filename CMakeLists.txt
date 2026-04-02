@@ -33,8 +33,8 @@ if(EMSCRIPTEN)
 else()
     message(STATUS "MOMENTUM: Initializing Desktop Shared Library Build Path...")
 
-    # Shared Library for Python/WSL use
-    add_library(MomentumCore SHARED ${LIB_SOURCES})
+    # Static Library for desktop use (avoids DLL export issues on Windows)
+    add_library(MomentumCore STATIC ${LIB_SOURCES})
     target_include_directories(MomentumCore PUBLIC ${INC_DIR})
     target_link_libraries(MomentumCore PUBLIC m)
 
@@ -54,6 +54,11 @@ else()
     add_executable(PhysicsTests tests/PhysicsTests.cpp)
     add_executable(QuantumTests tests/QuantumTests.cpp)
     add_executable(SerializationTests tests/SerializationTests.cpp)
+
+    target_include_directories(PhysEngine PRIVATE ${INC_DIR})
+    target_include_directories(PhysicsTests PRIVATE ${INC_DIR})
+    target_include_directories(QuantumTests PRIVATE ${INC_DIR})
+    target_include_directories(SerializationTests PRIVATE ${INC_DIR})
 
     target_link_libraries(PhysEngine PRIVATE MomentumCore)
     target_link_libraries(PhysicsTests PRIVATE MomentumCore)
@@ -109,11 +114,11 @@ else()
     )
     target_link_libraries(NumericalPropertiesTest PRIVATE GTest::gtest_main rapidcheck m)
 
-    add_executable(SimulationEngineTests tests/SimulationEngineTests.cpp)
+    add_executable(SimulationEngineTests tests/SimulationEngineTests.cpp src/physics/EnergyEngine.cpp)
     target_include_directories(SimulationEngineTests PRIVATE ${INC_DIR})
     target_link_libraries(SimulationEngineTests PRIVATE GTest::gtest_main m)
 
-    add_executable(SimulationPropertiesTest tests/SimulationPropertiesTest.cpp)
+    add_executable(SimulationPropertiesTest tests/SimulationPropertiesTest.cpp src/physics/EnergyEngine.cpp)
     target_include_directories(SimulationPropertiesTest PRIVATE
         ${INC_DIR}
         ${rapidcheck_SOURCE_DIR}/extras/gtest/include
@@ -132,7 +137,7 @@ else()
     target_link_libraries(RoundTripPropertiesTest PRIVATE MomentumCore GTest::gtest_main rapidcheck)
     target_compile_options(RoundTripPropertiesTest PRIVATE -Wno-sign-compare)
 
-    add_executable(PausePropertiesTest tests/PausePropertiesTest.cpp)
+    add_executable(PausePropertiesTest tests/PausePropertiesTest.cpp src/physics/EnergyEngine.cpp)
     target_include_directories(PausePropertiesTest PRIVATE
         ${INC_DIR}
         ${rapidcheck_SOURCE_DIR}/extras/gtest/include
@@ -153,13 +158,24 @@ else()
     )
     target_link_libraries(StabilityPropertiesTest PRIVATE GTest::gtest_main rapidcheck m)
 
-    add_executable(IntegrationTests tests/IntegrationTests.cpp)
+    add_executable(IntegrationTests tests/IntegrationTests.cpp src/physics/EnergyEngine.cpp)
     target_include_directories(IntegrationTests PRIVATE ${INC_DIR})
     target_link_libraries(IntegrationTests PRIVATE MomentumCore GTest::gtest_main)
 
-    add_executable(BenchmarkTests tests/BenchmarkTests.cpp)
+    add_executable(BenchmarkTests tests/BenchmarkTests.cpp src/physics/EnergyEngine.cpp)
     target_include_directories(BenchmarkTests PRIVATE ${INC_DIR})
     target_link_libraries(BenchmarkTests PRIVATE MomentumCore GTest::gtest_main)
+
+    add_executable(EnergyEngineTests tests/EnergyEngineTests.cpp src/physics/EnergyEngine.cpp)
+    target_include_directories(EnergyEngineTests PRIVATE ${INC_DIR})
+    target_link_libraries(EnergyEngineTests PRIVATE GTest::gtest_main m)
+
+    add_executable(EnergyPropertiesTest tests/EnergyPropertiesTest.cpp src/physics/EnergyEngine.cpp)
+    target_include_directories(EnergyPropertiesTest PRIVATE
+        ${INC_DIR}
+        ${rapidcheck_SOURCE_DIR}/extras/gtest/include
+    )
+    target_link_libraries(EnergyPropertiesTest PRIVATE GTest::gtest_main rapidcheck m)
 
     include(GoogleTest)
     gtest_discover_tests(Vector2Tests)
@@ -177,5 +193,7 @@ else()
     gtest_discover_tests(StabilityPropertiesTest)
     gtest_discover_tests(IntegrationTests)
     gtest_discover_tests(BenchmarkTests)
+    gtest_discover_tests(EnergyEngineTests)
+    gtest_discover_tests(EnergyPropertiesTest)
 
 endif()
