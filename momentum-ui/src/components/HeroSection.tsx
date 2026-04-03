@@ -3,11 +3,6 @@ import PhysicsOrb from './PhysicsOrb';
 
 /**
  * Computes the translate offset for a Physics Orb based on pointer proximity.
- *
- * When the pointer is within 120 px of the orb center, returns an offset
- * proportional to the distance, clamped to ±24 px per axis.
- * When the pointer is outside 120 px, returns { offsetX: 0, offsetY: 0 }.
- *
  * Exported for unit/property testing.
  */
 export function computeOrbOffset(
@@ -24,7 +19,6 @@ export function computeOrbOffset(
     return { offsetX: 0, offsetY: 0 };
   }
 
-  // Scale: closer pointer → larger offset, max ±24 px
   const scale = (1 - dist / 120) * 24;
   const offsetX = Math.max(-24, Math.min(24, (dx / dist) * scale));
   const offsetY = Math.max(-24, Math.min(24, (dy / dist) * scale));
@@ -42,32 +36,35 @@ const ORB_CONFIGS: Array<{
   color: 'accent' | 'accent-2' | 'accent-3';
   style: React.CSSProperties;
   animationDelay: string;
+  floatDuration: string;
 }> = [
   {
-    size: 120,
+    size: 160,
     color: 'accent',
-    style: { position: 'absolute', top: '15%', left: '10%' },
+    style: { position: 'absolute', top: '12%', left: '8%', opacity: 0.55 },
     animationDelay: '0s',
-  },
-  {
-    size: 80,
-    color: 'accent-2',
-    style: { position: 'absolute', top: '60%', right: '12%' },
-    animationDelay: '0.6s',
+    floatDuration: '6s',
   },
   {
     size: 100,
-    color: 'accent-3',
-    style: { position: 'absolute', bottom: '20%', left: '55%' },
+    color: 'accent-2',
+    style: { position: 'absolute', top: '55%', right: '10%', opacity: 0.45 },
     animationDelay: '1.2s',
+    floatDuration: '8s',
+  },
+  {
+    size: 130,
+    color: 'accent-3',
+    style: { position: 'absolute', bottom: '18%', left: '52%', opacity: 0.4 },
+    animationDelay: '2.4s',
+    floatDuration: '7s',
   },
 ];
 
-// Approximate orb center positions (relative to section) for offset computation
 const ORB_CENTERS = [
-  { xFrac: 0.1, yFrac: 0.15 },
-  { xFrac: 0.88, yFrac: 0.6 },
-  { xFrac: 0.55, yFrac: 0.8 },
+  { xFrac: 0.08, yFrac: 0.12 },
+  { xFrac: 0.9, yFrac: 0.55 },
+  { xFrac: 0.52, yFrac: 0.82 },
 ];
 
 const HeroSection: React.FC = () => {
@@ -79,6 +76,7 @@ const HeroSection: React.FC = () => {
     { offsetX: 0, offsetY: 0 },
     { offsetX: 0, offsetY: 0 },
   ]);
+  const [mounted, setMounted] = useState(false);
 
   const reducedMotion =
     typeof window !== 'undefined' &&
@@ -87,6 +85,12 @@ const HeroSection: React.FC = () => {
   const hoverCapable =
     typeof window !== 'undefined' &&
     window.matchMedia('(hover: hover)').matches;
+
+  // Entrance animation trigger
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), 60);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     if (reducedMotion || !hoverCapable) return;
@@ -140,6 +144,19 @@ const HeroSection: React.FC = () => {
         overflow: 'hidden',
       }}
     >
+      {/* Aurora background glow */}
+      <div aria-hidden="true" style={{
+        position: 'absolute',
+        inset: 0,
+        background: `
+          radial-gradient(ellipse 60% 40% at 20% 30%, rgba(109,167,255,0.18) 0%, transparent 60%),
+          radial-gradient(ellipse 50% 35% at 80% 60%, rgba(155,140,255,0.15) 0%, transparent 55%),
+          radial-gradient(ellipse 40% 30% at 50% 90%, rgba(72,214,201,0.12) 0%, transparent 50%)
+        `,
+        animation: reducedMotion ? 'none' : 'aurora 12s ease-in-out infinite alternate',
+        pointerEvents: 'none',
+      }} />
+
       {/* Physics Orbs */}
       {ORB_CONFIGS.map((orb, i) => (
         <PhysicsOrb
@@ -152,8 +169,9 @@ const HeroSection: React.FC = () => {
             ...orb.style,
             animation: reducedMotion
               ? 'none'
-              : `float 3s ease-in-out infinite alternate, pulse 4s ease-in-out infinite`,
+              : `heroFloat ${orb.floatDuration} ease-in-out infinite alternate`,
             animationDelay: reducedMotion ? '0s' : orb.animationDelay,
+            transition: reducedMotion ? 'none' : 'transform 0.12s ease-out',
           }}
         />
       ))}
@@ -163,10 +181,17 @@ const HeroSection: React.FC = () => {
         style={{
           fontFamily: 'var(--mono)',
           fontSize: 'clamp(2.4rem, 8vw, 6rem)',
-          letterSpacing: '0.05em',
+          letterSpacing: '0.06em',
           margin: 0,
           position: 'relative',
           zIndex: 1,
+          background: 'linear-gradient(135deg, var(--text) 30%, var(--accent) 70%, var(--accent-2) 100%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+          opacity: reducedMotion ? 1 : (mounted ? 1 : 0),
+          transform: reducedMotion ? 'none' : (mounted ? 'translateY(0)' : 'translateY(20px)'),
+          transition: reducedMotion ? 'none' : 'opacity 0.8s ease, transform 0.8s ease',
         }}
       >
         MOMENTUM
@@ -176,19 +201,47 @@ const HeroSection: React.FC = () => {
       <p
         style={{
           fontFamily: 'var(--sans)',
-          fontSize: 'clamp(1rem, 2vw, 1.25rem)',
-          marginTop: '1rem',
-          opacity: 0.75,
+          fontSize: 'clamp(1rem, 2vw, 1.2rem)',
+          marginTop: '1.25rem',
+          opacity: reducedMotion ? 0.7 : (mounted ? 0.7 : 0),
           textAlign: 'center',
-          maxWidth: '480px',
+          maxWidth: '520px',
           position: 'relative',
           zIndex: 1,
+          lineHeight: 1.6,
+          transform: reducedMotion ? 'none' : (mounted ? 'translateY(0)' : 'translateY(16px)'),
+          transition: reducedMotion ? 'none' : 'opacity 0.8s ease 0.2s, transform 0.8s ease 0.2s',
         }}
       >
         Physics-based task management — where every task obeys the laws of motion.
       </p>
 
-      {/* Scroll affordance chevron */}
+      {/* Stat pills */}
+      <div style={{
+        display: 'flex',
+        gap: '12px',
+        marginTop: '2.5rem',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        position: 'relative',
+        zIndex: 1,
+        opacity: reducedMotion ? 1 : (mounted ? 1 : 0),
+        transform: reducedMotion ? 'none' : (mounted ? 'translateY(0)' : 'translateY(12px)'),
+        transition: reducedMotion ? 'none' : 'opacity 0.8s ease 0.4s, transform 0.8s ease 0.4s',
+      }}>
+        {[
+          { label: '5 Physics Models', icon: '⚛' },
+          { label: 'WebAssembly Core', icon: '⚡' },
+          { label: 'Real-time Simulation', icon: '◉' },
+        ].map(({ label, icon }) => (
+          <div key={label} className="sim-badge" style={{ gap: '8px' }}>
+            <span aria-hidden="true">{icon}</span>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: '0.78rem' }}>{label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Scroll affordance */}
       <div
         aria-label="Scroll to explore"
         style={{
@@ -198,23 +251,30 @@ const HeroSection: React.FC = () => {
           transform: 'translateX(-50%)',
           animation: reducedMotion ? 'none' : 'float 2s ease-in-out infinite alternate',
           zIndex: 1,
+          opacity: 0.5,
         }}
       >
         <svg
           aria-hidden="true"
-          width="32"
-          height="32"
+          width="28"
+          height="28"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
-          strokeWidth="2"
+          strokeWidth="1.5"
           strokeLinecap="round"
           strokeLinejoin="round"
-          style={{ opacity: 0.6 }}
         >
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </div>
+
+      <style>{`
+        @keyframes heroFloat {
+          from { transform: translateY(0px) scale(1); }
+          to   { transform: translateY(-18px) scale(1.04); }
+        }
+      `}</style>
     </section>
   );
 };

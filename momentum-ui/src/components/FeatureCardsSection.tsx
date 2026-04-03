@@ -46,7 +46,7 @@ export const FEATURES = [
 
 const FeatureCardsSection: React.FC = () => {
   return (
-    <section aria-label="Features" style={{ padding: '48px 0' }}>
+    <section aria-label="Features">
       <div
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
         style={{ gap: '14px' }}

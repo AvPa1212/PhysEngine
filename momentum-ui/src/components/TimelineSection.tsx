@@ -31,6 +31,18 @@ export const MILESTONES: Milestone[] = [
     description:
       'The React/TypeScript frontend launched with the dark glassmorphism aesthetic, aurora gradients, and real-time physics visualizations.',
   },
+  {
+    date: 'Q1 2025',
+    title: 'Energy & Thermodynamics',
+    description:
+      'The energy system and thermodynamics engine shipped, adding heat, entropy, and burnout modeling to the simulation.',
+  },
+  {
+    date: 'Q2 2025',
+    title: 'Chaos & Quantum Engines',
+    description:
+      'Butterfly-effect sensitivity analysis and quantum superposition mechanics brought the full five-model physics suite to life.',
+  },
 ];
 
 interface TimelineSectionProps {
@@ -51,13 +63,12 @@ const TimelineSection: React.FC<TimelineSectionProps> = ({
 
     const observers: IntersectionObserver[] = [];
 
-    itemRefs.current.forEach((el) => {
+    itemRefs.current.forEach((el, idx) => {
       if (!el) return;
 
-      // Start hidden
       el.style.opacity = '0';
       el.style.transform = 'translateY(24px)';
-      el.style.transition = 'opacity 400ms ease, transform 400ms ease';
+      el.style.transition = `opacity 400ms ease ${idx * 80}ms, transform 400ms ease ${idx * 80}ms`;
 
       const observer = new IntersectionObserver(
         (entries) => {
@@ -89,7 +100,7 @@ const TimelineSection: React.FC<TimelineSectionProps> = ({
           listStyle: 'none',
           margin: 0,
           padding: 0,
-          paddingLeft: '1.5rem',
+          paddingLeft: '2rem',
           borderLeft: '2px solid var(--line)',
         }}
       >
@@ -97,23 +108,36 @@ const TimelineSection: React.FC<TimelineSectionProps> = ({
           <li
             key={`${milestone.date}-${i}`}
             role="listitem"
-            ref={(el) => {
-              itemRefs.current[i] = el;
-            }}
+            ref={(el) => { itemRefs.current[i] = el; }}
             style={
               reducedMotion
-                ? { opacity: 1, transform: 'none', marginBottom: '2rem' }
-                : { marginBottom: '2rem' }
+                ? { opacity: 1, transform: 'none', marginBottom: '2.5rem', position: 'relative' }
+                : { marginBottom: '2.5rem', position: 'relative' }
             }
           >
+            {/* Timeline dot */}
+            <div aria-hidden="true" style={{
+              position: 'absolute',
+              left: '-2.6rem',
+              top: '0.2rem',
+              width: '10px',
+              height: '10px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, var(--accent), var(--accent-2))',
+              boxShadow: '0 0 10px rgba(109,167,255,0.5)',
+              border: '2px solid var(--bg-1)',
+            }} />
+
             <time
               dateTime={milestone.date}
               style={{
                 fontFamily: 'var(--mono)',
-                fontSize: '0.75rem',
-                opacity: 0.6,
+                fontSize: '0.72rem',
+                letterSpacing: '0.1em',
+                opacity: 0.55,
                 display: 'block',
-                marginBottom: '0.25rem',
+                marginBottom: '0.35rem',
+                textTransform: 'uppercase',
               }}
             >
               {milestone.date}
@@ -123,6 +147,7 @@ const TimelineSection: React.FC<TimelineSectionProps> = ({
                 fontFamily: 'var(--mono)',
                 fontSize: '1rem',
                 margin: '0 0 0.5rem',
+                letterSpacing: '0.04em',
               }}
             >
               {milestone.title}
@@ -131,8 +156,9 @@ const TimelineSection: React.FC<TimelineSectionProps> = ({
               style={{
                 fontFamily: 'var(--sans)',
                 fontSize: '0.875rem',
-                opacity: 0.8,
+                opacity: 0.75,
                 margin: 0,
+                lineHeight: 1.65,
               }}
             >
               {milestone.description}

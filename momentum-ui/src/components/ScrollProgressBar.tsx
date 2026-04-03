@@ -16,7 +16,7 @@ export function computeScrollProgress(
 }
 
 interface ScrollProgressBarProps {
-  scrollContainerRef: React.RefObject<HTMLDivElement>;
+  scrollContainerRef: React.RefObject<HTMLElement | HTMLDivElement>;
 }
 
 const ScrollProgressBar: React.FC<ScrollProgressBarProps> = ({ scrollContainerRef }) => {

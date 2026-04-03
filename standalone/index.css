@@ -119,11 +119,12 @@ canvas {
     inset: 16px;
     z-index: 12;
     display: grid;
-    grid-template-columns: minmax(320px, 420px) minmax(280px, 360px);
+    grid-template-columns: minmax(320px, 450px) minmax(280px, 380px);
     grid-template-rows: auto 1fr auto;
-    gap: 14px;
+    gap: 16px;
     align-content: start;
     pointer-events: none;
+    padding: 0;
 }
 
 #hud > * {
@@ -134,7 +135,7 @@ canvas {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), var(--glass));
     border: 1px solid var(--glass-border);
     border-radius: 18px;
-    padding: 14px;
+    padding: 18px;
     box-shadow: var(--shadow);
     backdrop-filter: blur(10px) saturate(1.2);
     -webkit-backdrop-filter: blur(10px) saturate(1.2);
@@ -142,6 +143,7 @@ canvas {
     position: relative;
     overflow: hidden;
     animation: panelRise 800ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    word-break: break-word;
 }
 
 .panel::before {
@@ -197,7 +199,7 @@ canvas {
 
 .hero-meta {
     display: grid;
-    gap: 8px;
+    gap: 10px;
     min-width: 200px;
 }
 
@@ -212,10 +214,11 @@ canvas {
     font-size: 0.82rem;
     font-weight: 700;
     letter-spacing: 0.4px;
-    padding: 6px 12px;
+    padding: 8px 14px;
     text-transform: uppercase;
     white-space: normal;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
+    min-height: 36px;
 }
 
 .xp-track {
@@ -267,7 +270,10 @@ canvas {
     font-size: 0.92rem;
     color: var(--text-soft);
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    padding-bottom: 6px;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 .val {
@@ -321,7 +327,7 @@ canvas {
 }
 
 .quest {
-    padding: 8px;
+    padding: 10px;
     border-radius: 12px;
     border: 1px solid rgba(255, 255, 255, 0.12);
     background: rgba(0, 0, 0, 0.2);
@@ -407,7 +413,7 @@ input[type=range] {
 
 .badge {
     font-size: 0.8rem;
-    padding: 6px 9px;
+    padding: 7px 11px;
     border-radius: 999px;
     border: 1px solid rgba(255, 255, 255, 0.22);
     color: #d7e7ff;
@@ -415,6 +421,8 @@ input[type=range] {
     opacity: 0.45;
     transform: scale(0.95);
     transition: all 260ms ease;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 .badge.unlocked {
@@ -435,10 +443,12 @@ input[type=range] {
 }
 
 .score-pill {
-    padding: 4px 10px;
+    padding: 5px 12px;
     border-radius: 999px;
     border: 1px solid rgba(255, 255, 255, 0.2);
     background: rgba(0, 0, 0, 0.26);
+    white-space: normal;
+    overflow-wrap: break-word;
 }
 
 .toolbar {
@@ -464,7 +474,7 @@ input[type=range] {
     border: 1px solid rgba(63, 240, 255, 0.55);
     color: #cdf8ff;
     background: linear-gradient(135deg, rgba(8, 43, 64, 0.8), rgba(8, 23, 48, 0.65));
-    padding: 10px 12px;
+    padding: 11px 15px;
     border-radius: 11px;
     font-family: inherit;
     font-weight: 700;
@@ -475,7 +485,11 @@ input[type=range] {
     font-size: clamp(0.8rem, 1vw, 0.92rem);
     line-height: 1.2;
     white-space: normal;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .btn:hover {
