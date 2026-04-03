@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BrowserRouter,
   Navigate,
@@ -23,10 +23,12 @@ import {
 } from './appState';
 import './index.css';
 
+const AboutPage = React.lazy(() => import('./components/AboutPage'));
+
 const DEFAULT_GROUP_ID = 'grp-default';
 const BURNOUT_THRESHOLD = 100;
 
-type PageKey = 'simulation' | 'tasks' | 'groups' | 'analytics';
+type PageKey = 'simulation' | 'tasks' | 'groups' | 'analytics' | 'about';
 
 type Task = {
   id: string;
@@ -71,6 +73,7 @@ const NAV_ITEMS: Array<{ key: PageKey; label: string; path: string; icon: string
   { key: 'tasks', label: 'Tasks', path: '/tasks', icon: '◈' },
   { key: 'groups', label: 'Groups', path: '/groups', icon: '⬡' },
   { key: 'analytics', label: 'Analytics', path: '/analytics', icon: '◉' },
+  { key: 'about', label: 'About', path: '/about', icon: '◎' },
 ];
 
 function toRange(value: number, min: number, max: number) {
@@ -100,16 +103,11 @@ function App() {
 // Animated particle trail hook for canvas
 function useAnimatedParticles(tasks: Task[], taskStates: Record<string, WorkerTaskState>, groupMap: Record<string, TaskGroup>) {
   const [tick, setTick] = useState(0);
-  const rafRef = useRef<number>(0);
   useEffect(() => {
-    let frame = 0;
-    const animate = () => {
-      frame++;
-      if (frame % 2 === 0) setTick(t => t + 1);
-      rafRef.current = requestAnimationFrame(animate);
-    };
-    rafRef.current = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(rafRef.current);
+    const intervalId = window.setInterval(() => {
+      setTick(t => t + 1);
+    }, 33);
+    return () => window.clearInterval(intervalId);
   }, []);
   return tick;
 }
@@ -160,6 +158,10 @@ function Workspace() {
 
   const activeTaskIdsRef = useRef<Set<string>>(new Set());
   const taskMassRef = useRef<Record<string, number>>({});
+  const persistTimersRef = useRef<{ tasks: number | null; groups: number | null }>({
+    tasks: null,
+    groups: null,
+  });
   const tick = useAnimatedParticles(tasks, taskStates, {});
 
   const groupMap = useMemo(
@@ -203,10 +205,10 @@ function Workspace() {
 
   // Track energy/entropy history for sparklines
   useEffect(() => {
-    setEnergyHistory(prev => [...prev.slice(-59), totalEnergy]);
-    setEntropyHistory(prev => [...prev.slice(-59), totalEntropy]);
-    setCollapseHistory(prev => [...prev.slice(-59), averageCollapse * 100]);
-    setStressHistory(prev => [...prev.slice(-59), activeEnergyDensity]);
+    setEnergyHistory(prev => [...prev.slice(-39), totalEnergy]);
+    setEntropyHistory(prev => [...prev.slice(-39), totalEntropy]);
+    setCollapseHistory(prev => [...prev.slice(-39), averageCollapse * 100]);
+    setStressHistory(prev => [...prev.slice(-39), activeEnergyDensity]);
   }, [totalEnergy, totalEntropy, averageCollapse, activeEnergyDensity]);
 
   useEffect(() => {
@@ -249,11 +251,35 @@ function Workspace() {
   }, [notifications]);
 
   useEffect(() => {
-    persistJson('momentum_tasks', tasks);
+    if (persistTimersRef.current.tasks !== null) {
+      window.clearTimeout(persistTimersRef.current.tasks);
+    }
+
+    persistTimersRef.current.tasks = window.setTimeout(() => {
+      persistJson('momentum_tasks', tasks);
+    }, 150);
+
+    return () => {
+      if (persistTimersRef.current.tasks !== null) {
+        window.clearTimeout(persistTimersRef.current.tasks);
+      }
+    };
   }, [tasks]);
 
   useEffect(() => {
-    persistJson('momentum_groups', groups);
+    if (persistTimersRef.current.groups !== null) {
+      window.clearTimeout(persistTimersRef.current.groups);
+    }
+
+    persistTimersRef.current.groups = window.setTimeout(() => {
+      persistJson('momentum_groups', groups);
+    }, 150);
+
+    return () => {
+      if (persistTimersRef.current.groups !== null) {
+        window.clearTimeout(persistTimersRef.current.groups);
+      }
+    };
   }, [groups]);
 
   useEffect(() => {
@@ -1158,6 +1184,12 @@ function Workspace() {
               </div>
             </div>
           }/>
+
+          <Route path="/about" element={
+            <Suspense fallback={<div className="loader"><div className="loader-ring"></div></div>}>
+              <AboutPage />
+            </Suspense>
+          } />
 
           <Route path="*" element={<Navigate to="/simulation" replace />} />
         </Routes>

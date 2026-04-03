@@ -158,56 +158,59 @@ TEST(BenchmarkTests, RK4IntegrationThroughput) {
 // ---------------------------------------------------------------------------
 TEST(BenchmarkTests, EnergyCalculationOverhead) {
     const int TASKS = 100;
-    const int STEPS = 1000;
-
-    // --- Classical-only engine (energy disabled by skipping EnergyEngine) ---
-    // We approximate "classical only" by using a bare loop over integrateRK4
-    // without the full SimulationEngine::update() path.
-    std::vector<Task> classicalTasks;
-    classicalTasks.reserve(TASKS);
-    for (int i = 0; i < TASKS; ++i) {
-        Task t = makeTypicalTask();
-        t.deadlineTime = 10.0 + static_cast<double>(i) * 0.1;
-        classicalTasks.push_back(t);
-    }
-
+    const int BASE_STEPS = 1000;
     const double dt = Config::TIME_STEP;
+    constexpr long long MIN_BASELINE_NS = 20'000'000LL;
 
-    auto classStart = std::chrono::high_resolution_clock::now();
-    for (int s = 0; s < STEPS; ++s) {
-        for (auto& t : classicalTasks) {
-            ClassicalEngine::integrateRK4(t, dt);
-            if (t.deadlineTime < 0.1) t.deadlineTime = 10.0;
+    auto makeTaskBatch = [&]() {
+        std::vector<Task> tasks;
+        tasks.reserve(TASKS);
+        for (int i = 0; i < TASKS; ++i) {
+            Task t = makeTypicalTask();
+            t.deadlineTime = 10.0 + static_cast<double>(i) * 0.1;
+            tasks.push_back(t);
         }
-    }
-    auto classEnd = std::chrono::high_resolution_clock::now();
-    long long classNs = std::chrono::duration_cast<std::chrono::nanoseconds>(classEnd - classStart).count();
+        return tasks;
+    };
 
-    // --- Classical + energy engine ---
-    std::vector<Task> energyTasks;
-    energyTasks.reserve(TASKS);
-    for (int i = 0; i < TASKS; ++i) {
-        Task t = makeTypicalTask();
-        t.deadlineTime = 10.0 + static_cast<double>(i) * 0.1;
-        energyTasks.push_back(t);
-    }
-
-    auto energyStart = std::chrono::high_resolution_clock::now();
-    for (int s = 0; s < STEPS; ++s) {
-        for (auto& t : energyTasks) {
-            ClassicalEngine::integrateRK4(t, dt);
-            EnergyEngine::calculateEnergy(t);
-            if (t.deadlineTime < 0.1) t.deadlineTime = 10.0;
+    auto runBatch = [&](bool includeEnergy, int steps) {
+        auto tasks = makeTaskBatch();
+        const auto start = std::chrono::high_resolution_clock::now();
+        for (int s = 0; s < steps; ++s) {
+            for (auto& t : tasks) {
+                ClassicalEngine::integrateRK4(t, dt);
+                if (includeEnergy) {
+                    EnergyEngine::calculateEnergy(t);
+                }
+                if (t.deadlineTime < 0.1) t.deadlineTime = 10.0;
+            }
         }
+        const auto end = std::chrono::high_resolution_clock::now();
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+    };
+
+    int measuredSteps = BASE_STEPS;
+    long long classNs = 0;
+    long long energyNs = 0;
+
+    do {
+        classNs = runBatch(false, measuredSteps);
+        energyNs = runBatch(true, measuredSteps);
+        if (classNs >= MIN_BASELINE_NS) {
+            break;
+        }
+        measuredSteps *= 2;
+    } while (measuredSteps <= BASE_STEPS * 32);
+
+    if (classNs < MIN_BASELINE_NS) {
+        GTEST_SKIP() << "Benchmark baseline too small for a stable overhead measurement (" << classNs / 1'000'000.0 << " ms)";
     }
-    auto energyEnd = std::chrono::high_resolution_clock::now();
-    long long energyNs = std::chrono::duration_cast<std::chrono::nanoseconds>(energyEnd - energyStart).count();
 
     double overheadFraction = (classNs > 0)
         ? static_cast<double>(energyNs - classNs) / static_cast<double>(classNs)
         : 0.0;
 
-    std::cout << "[Benchmark 21.1] Energy overhead vs classical-only (" << TASKS << " tasks x " << STEPS << " steps)\n"
+    std::cout << "[Benchmark 21.1] Energy overhead vs classical-only (" << TASKS << " tasks x " << measuredSteps << " steps)\n"
               << "  Classical only : " << classNs / 1'000'000 << " ms\n"
               << "  Classical+Energy: " << energyNs / 1'000'000 << " ms\n"
               << "  Overhead       : " << overheadFraction * 100.0 << " %\n";

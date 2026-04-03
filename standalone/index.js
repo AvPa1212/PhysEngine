@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const MAX_POINTS = 2000;
+const MAX_POINTS = 1200;
 const ENGINE_SCRIPT_URL = new URL('../web_dist/MomentumCore.js', import.meta.url);
 const ENGINE_WASM_DIR_URL = new URL('../web_dist/', import.meta.url);
 
@@ -41,6 +41,9 @@ let shockwave;
 let diagnosticFrame = 0;
 let diagnosticLoopHandle = 0;
 let appStarted = false;
+const actionCooldowns = new Map();
+let toastBurstCount = 0;
+let toastBurstWindow = 0;
 
 const elements = {
     container: document.getElementById('container'),
@@ -91,7 +94,9 @@ function resizeCanvas() {
 
 function loadScriptOnce(url) {
     return new Promise((resolve, reject) => {
-        const existing = document.querySelector(`script[data-engine-src="${url}"]`);
+        const existing = Array.from(document.scripts).find((script) =>
+            script.dataset.engineSrc === url || script.src === url
+        );
         if (existing?.dataset.loaded === 'true') {
             resolve();
             return;
@@ -209,6 +214,17 @@ function showToast(message) {
         return;
     }
 
+    const now = performance.now();
+    if (now - toastBurstWindow > 1000) {
+        toastBurstWindow = now;
+        toastBurstCount = 0;
+    }
+
+    if (toastBurstCount >= 6) {
+        return;
+    }
+    toastBurstCount += 1;
+
     const toast = document.createElement('div');
     toast.className = 'toast';
     toast.innerText = message;
@@ -262,6 +278,18 @@ function addScore(points) {
     state.score += Math.round(points * state.combo);
 }
 
+function runWithCooldown(actionKey, cooldownMs, handler) {
+    const now = performance.now();
+    const lastRun = actionCooldowns.get(actionKey) ?? 0;
+    if (now - lastRun < cooldownMs) {
+        return false;
+    }
+
+    actionCooldowns.set(actionKey, now);
+    handler();
+    return true;
+}
+
 function updateQuestUI(elementId, percentage, textId) {
     const clamped = Math.max(0, Math.min(1, percentage));
     const quest = document.getElementById(elementId);
@@ -282,8 +310,12 @@ function updateQuestUI(elementId, percentage, textId) {
 }
 
 function updateTaskVisualization(entropy) {
+    if (state.ticks % 2 !== 0) {
+        return;
+    }
+
     state.entropyHistory.push(entropy);
-    if (state.entropyHistory.length > 48) {
+    if (state.entropyHistory.length > 32) {
         state.entropyHistory.shift();
     }
 
@@ -495,9 +527,10 @@ function initGraphics() {
         shockwave = null;
         state.is3D = false;
         if (elements.btnToggle) {
+            elements.btnToggle.disabled = true;
             elements.btnToggle.innerText = 'Mode: 2D Fallback';
         }
-        captureFirstRuntimeFailure('InitGraphicsCatch', graphicsError);
+        console.error(graphicsError);
         setBootState('VISUAL DEGRADED', 'WebGL is unavailable. Continuing with the 2D diagnostic renderer.', true);
         startDiagnosticLoop('2D FALLBACK');
         return;
@@ -555,25 +588,51 @@ function setErrorState() {
 }
 
 function bindSliders(Module, task) {
+    let pendingSliderFrame = 0;
+    let pendingMassValue = null;
+    let pendingStressXValue = null;
+
+    function flushSliderUpdates() {
+        pendingSliderFrame = 0;
+
+        if (pendingMassValue !== null && Module.Task_SetMass) {
+            Module.Task_SetMass(task, pendingMassValue);
+        }
+
+        if (pendingStressXValue !== null && Module.Task_SetStress) {
+            const currentY = typeof Module.Task_GetStressY === 'function' ? Module.Task_GetStressY(task) : 0;
+            const currentZ = typeof Module.Task_GetStressZ === 'function' ? Module.Task_GetStressZ(task) : 0;
+            Module.Task_SetStress(task, pendingStressXValue, currentY, currentZ);
+        }
+    }
+
+    function scheduleSliderFlush() {
+        if (pendingSliderFrame !== 0) {
+            return;
+        }
+
+        pendingSliderFrame = requestAnimationFrame(flushSliderUpdates);
+    }
+
     elements.sliderMass.oninput = (event) => {
         updateSliderReadouts();
-        if (Module.Task_SetMass) {
-            Module.Task_SetMass(task, parseFloat(event.target.value));
-        }
+        pendingMassValue = parseFloat(event.target.value);
+        scheduleSliderFlush();
     };
 
     elements.sliderStressX.oninput = (event) => {
         updateSliderReadouts();
-        const currentY = typeof Module.Task_GetStressY === 'function' ? Module.Task_GetStressY(task) : 0;
-        const currentZ = typeof Module.Task_GetStressZ === 'function' ? Module.Task_GetStressZ(task) : 0;
-        if (Module.Task_SetStress) {
-            Module.Task_SetStress(task, parseFloat(event.target.value), currentY, currentZ);
-        }
+        pendingStressXValue = parseFloat(event.target.value);
+        scheduleSliderFlush();
     };
 }
 
 function bindToolbar(Module, task) {
     elements.btnToggle.onclick = () => {
+        if (!runWithCooldown('toggle-view', 180, () => {})) {
+            return;
+        }
+
         if (!has3DRenderer()) {
             state.is3D = false;
             elements.btnToggle.innerText = 'Mode: 2D Fallback';
@@ -594,6 +653,10 @@ function bindToolbar(Module, task) {
     };
 
     elements.btnPause.onclick = () => {
+        if (!runWithCooldown('pause-toggle', 150, () => {})) {
+            return;
+        }
+
         state.isPaused = !state.isPaused;
         elements.btnPause.innerText = state.isPaused ? 'Resume' : 'Pause';
         elements.stateTxt.innerText = state.isPaused ? 'PAUSED' : 'RUNNING';
@@ -601,6 +664,10 @@ function bindToolbar(Module, task) {
     };
 
     elements.btnClear.onclick = () => {
+        if (!runWithCooldown('clear-trails', 250, () => {})) {
+            return;
+        }
+
         state.pointHistory.length = 0;
         state.entropyHistory.length = 0;
         ctx2d.clearRect(0, 0, elements.canvas2d.width, elements.canvas2d.height);
@@ -608,6 +675,10 @@ function bindToolbar(Module, task) {
     };
 
     elements.btnCollapse.onclick = () => {
+        if (!runWithCooldown('force-collapse', 450, () => {})) {
+            return;
+        }
+
         Module.Engine_PerformQuantumCollapse(task);
         triggerCollapseVisuals();
         state.manualCollapseCount += 1;
@@ -643,22 +714,24 @@ function render2D(cx, cy) {
 function render3D(cx, cy, cz) {
     particle.position.set(cx, cy, cz - 25);
 
-    state.pointHistory.push(cx, cy, cz - 25);
-    if (state.pointHistory.length > MAX_POINTS * 3) {
-        state.pointHistory.splice(0, 3);
-    }
+    if (state.ticks % 2 === 0) {
+        state.pointHistory.push(cx, cy, cz - 25);
+        if (state.pointHistory.length > MAX_POINTS * 3) {
+            state.pointHistory.splice(0, 3);
+        }
 
-    const positionAttribute = trail.geometry.attributes.position;
-    for (let i = 0; i < state.pointHistory.length / 3; i += 1) {
-        positionAttribute.setXYZ(
-            i,
-            state.pointHistory[i * 3],
-            state.pointHistory[i * 3 + 1],
-            state.pointHistory[i * 3 + 2]
-        );
+        const positionAttribute = trail.geometry.attributes.position;
+        for (let i = 0; i < state.pointHistory.length / 3; i += 1) {
+            positionAttribute.setXYZ(
+                i,
+                state.pointHistory[i * 3],
+                state.pointHistory[i * 3 + 1],
+                state.pointHistory[i * 3 + 2]
+            );
+        }
+        positionAttribute.needsUpdate = true;
+        trail.geometry.setDrawRange(0, state.pointHistory.length / 3);
     }
-    positionAttribute.needsUpdate = true;
-    trail.geometry.setDrawRange(0, state.pointHistory.length / 3);
 
     renderer.render(scene, camera);
 }
@@ -793,7 +866,6 @@ async function initializeApp() {
         return;
     }
     appStarted = true;
-    ensureDebugConsole();
 
     try {
         initGraphics();
@@ -802,6 +874,7 @@ async function initializeApp() {
         captureFirstRuntimeFailure('InitGraphicsCatch', graphicsError);
         setBootState('VISUAL ERROR', 'Could not initialize graphics. The simulation is running in diagnostic mode.', true);
         setErrorState();
+        return;
     }
 
     setBootState('BOOTING', 'Graphics online. Initializing simulation...');
